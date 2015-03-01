@@ -3,3 +3,12 @@
 name = "skeletal_animation"
 version = "0.0.1"
 authors = ["stjahns <s.t.jahns@gmail.com>"]
+
+[dependencies.collada]
+git = "https://github.com/PistonDevelopers/piston_collada"
+
+[dependencies.gfx_debug_draw]
+git = "https://github.com/PistonDevelopers/gfx-debug-draw"
+
+[dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"

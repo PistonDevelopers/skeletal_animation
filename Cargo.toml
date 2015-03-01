@@ -1,0 +1,5 @@
+[package]
+
+name = "skeletal_animation"
+version = "0.0.1"
+authors = ["stjahns <s.t.jahns@gmail.com>"]

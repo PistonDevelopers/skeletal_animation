@@ -12,3 +12,21 @@ git = "https://github.com/PistonDevelopers/gfx-debug-draw"
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"
+
+[dependencies.gfx]
+git = "https://github.com/gfx-rs/gfx-rs"
+
+[dependencies.gfx_macros]
+git = "https://github.com/gfx-rs/gfx-rs"
+
+[dependencies.wavefront_obj]
+git = "https://github.com/PistonDevelopers/wavefront_obj"
+
+[dependencies.geometry]
+git = "https://github.com/PistonDevelopers/geometry.git"
+
+[dependencies.quack]
+git = "https://github.com/pistondevelopers/quack"
+
+[dependencies.gfx_device_gl]
+git = "https://github.com/gfx-rs/gfx_device_gl"

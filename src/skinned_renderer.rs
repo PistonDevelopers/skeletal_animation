@@ -86,7 +86,7 @@ impl SkinnedRenderer {
 
         let sample = self.animation_clip.sample_at_time(elapsed_time);
         graphics.device.update_buffer(self.skinning_transforms_buffer.clone(), &sample.skinning_transforms[..], 0);
-        graphics.draw(&self.batch, &self.shader_params, frame);
+        graphics.draw(&self.batch, &self.shader_params, frame).unwrap();
     }
 }
 

@@ -1,12 +1,15 @@
 use collada::Animation as ColladaAnim;
 use collada::Skeleton;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use vecmath::{Matrix4, mat4_id, row_mat4_transform, row_mat4_mul};
+
+use gfx::{Device};
 use gfx_debug_draw::DebugRenderer;
 
 #[derive(Debug)]
-pub struct AnimationClip {
-    pub samples: Vec<AnimationSample>,
+pub struct AnimationClip<D: Device> {
+    pub samples: Vec<AnimationSample<D>>,
 
     ///
     /// Assumes constant sample rate for animation
@@ -14,14 +17,14 @@ pub struct AnimationClip {
     pub samples_per_second: f32,
 }
 
-impl AnimationClip {
+impl<D: Device> AnimationClip<D> {
 
-    pub fn sample_at_time(&self, elapsed_time: f32) -> &AnimationSample {
+    pub fn sample_at_time(&self, elapsed_time: f32) -> &AnimationSample<D> {
         let sample_index = (elapsed_time * self.samples_per_second) as usize % self.samples.len();
         &self.samples[sample_index]
     }
 
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<ColladaAnim>) -> AnimationClip {
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<ColladaAnim>) -> AnimationClip<D> {
 
         // Build an index of joint names to anims
         let mut joint_animations = HashMap::new();
@@ -57,6 +60,7 @@ impl AnimationClip {
                 local_poses: local_poses,
                 global_poses: global_poses,
                 skinning_transforms: skinning_transforms,
+                _device_marker: PhantomData,
             }
         }).collect();
 
@@ -77,6 +81,7 @@ fn calculate_skinning_transforms(
 
     // TODO do rotation as step in collada importer
 
+    /*
     let rotate_on_x_inv =
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -84,9 +89,11 @@ fn calculate_skinning_transforms(
         [0.0, (PI/2.0).sin(), (-PI/2.0).cos(), 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ];
+    */
 
     skeleton.joints.iter().enumerate().map(|(i, joint)| {
-        let inverse_bind_pose = row_mat4_mul(joint.inverse_bind_pose, rotate_on_x_inv);
+        //let inverse_bind_pose = row_mat4_mul(joint.inverse_bind_pose, rotate_on_x_inv);
+        let inverse_bind_pose = row_mat4_mul(joint.inverse_bind_pose, mat4_id());
         row_mat4_mul(global_poses[i], inverse_bind_pose)
     }).collect()
 }
@@ -99,6 +106,7 @@ fn calculate_global_poses(
     use std::f32::consts::PI;
     use std::num::{Float};
 
+    /*
     let rotate_on_x =
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -106,6 +114,7 @@ fn calculate_global_poses(
         [0.0, (-PI/2.0).sin(), (PI/2.0).cos(), 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ];
+    */
 
     let mut global_poses: Vec<Matrix4<f32>> = Vec::new();
 
@@ -118,7 +127,8 @@ fn calculate_global_poses(
             // we need to do a PI/2 rotation around x axis
             // to adjust for that
             // TODO do this as step in collada importer
-            rotate_on_x
+            //rotate_on_x
+            mat4_id()
         };
 
         global_poses.push(row_mat4_mul(
@@ -130,14 +140,21 @@ fn calculate_global_poses(
     global_poses
 }
 
+pub struct SQTTransform {
+    translation: [f32; 3],
+    scale: f32,
+    rotation: [f32; 4],
+}
+
 #[derive(Debug)]
-pub struct AnimationSample
+pub struct AnimationSample<D: Device>
 {
     ///
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
     ///
-    local_poses: Vec<Matrix4<f32>>, // TODO what would these actually be used for?
+    local_poses: Vec<Matrix4<f32>>,
+    //local_poses_sqt: Vec<SQTTransform>,
 
     ///
     /// Global pose transforms for each joint in the targeted skeleton
@@ -151,11 +168,13 @@ pub struct AnimationSample
     /// (relative to model)
     ///
     pub skinning_transforms: Vec<Matrix4<f32>>,
+
+    _device_marker: PhantomData<D>,
 }
 
-impl AnimationSample {
+impl<D: Device> AnimationSample<D> {
 
-    pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer, skeleton: &Skeleton, draw_labels: bool) {
+    pub fn debug_draw(&self, debug_renderer: &mut DebugRenderer<D>, skeleton: &Skeleton, draw_labels: bool) {
         for (joint_index, joint) in skeleton.joints.iter().enumerate() {
 
             let joint_position = row_mat4_transform(self.global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);

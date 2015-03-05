@@ -1,11 +1,15 @@
 use collada::document::ColladaDocument;
 use collada::{BindData, VertexWeight, Skeleton};
 use geometry::Object as GeometryObject;
-use geometry::{ Position, TextureCoords, Normal, Geometry };
+use geometry::Model as GeometryModel;
+use geometry::{ Position, TextureCoords, Normal, SkinningWeights, Geometry };
 use gfx::batch::RefBatch;
+use gfx::shade::TextureParam;
 use gfx::state::Comparison;
+use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
 use gfx::{ BufferHandle, BufferUsage, Device, DeviceExt, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, ToSlice, RawBufferHandle };
 use gfx_device_gl::{ GlDevice, GlResources };
+use gfx_texture::{ Texture };
 use quack::{ SetAt };
 use std::default::Default;
 use vecmath::*;
@@ -16,18 +20,21 @@ use animation::AnimationClip;
 
 static MAX_JOINTS: usize = 64;
 
-pub struct SkinnedRenderer {
-    animation_clip: AnimationClip,
+pub struct SkinnedRenderBatch {
     skinning_transforms_buffer: BufferHandle<GlResources, [[f32; 4]; 4]>,
-    shader_params: SkinnedShaderParams<GlResources>,
     batch: RefBatch<SkinnedShaderParams<GlResources>>,
+}
+pub struct SkinnedRenderer {
+    animation_clip: AnimationClip<GlDevice>,
+    render_batches: Vec<SkinnedRenderBatch>,
 }
 
 impl SkinnedRenderer {
 
     pub fn from_collada(
         graphics: &mut Graphics<GlDevice>,
-        collada_document: ColladaDocument
+        collada_document: ColladaDocument,
+        texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
     ) -> Result<SkinnedRenderer, ProgramError> {
 
         let program = match graphics.device.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
@@ -42,34 +49,54 @@ impl SkinnedRenderer {
 
         let animation_clip = AnimationClip::from_collada(skeleton, &animations);
 
-        let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
-        let mut index_data: Vec<u32> = Vec::new();
-        let mut geometry_data: Geometry = Geometry::new();
-        GeometryObject::add_object(&obj_set.objects[0], &mut vertex_data, &mut index_data, &mut geometry_data);
+        let mut render_batches = Vec::new();
 
-        let bind_data_set = collada_document.get_bind_data_set().unwrap();
-        bind_vertices(&mut vertex_data, &bind_data_set.bind_data[0], &skeleton, &obj_set.objects[0]);
-        let mesh = graphics.device.create_mesh(vertex_data.as_slice());
+        for (i, object) in obj_set.objects.iter().enumerate().take(6) {
 
-        let state = DrawState::new().depth(Comparison::LessEqual, true);
+            let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
+            let mut index_data: Vec<u32> = Vec::new();
+            let mut geometry_data: Geometry = Geometry::new();
+            let mut objects = GeometryObject::new();
 
-        let slice = graphics.device
-            .create_buffer_static::<u32>(index_data.as_slice())
-            .to_slice(PrimitiveType::TriangleList);
+            GeometryObject::add_object(&object, &mut vertex_data, &mut index_data, &mut geometry_data);
 
-        let batch: RefBatch<SkinnedShaderParams<GlResources>> = graphics.make_batch(&program, &mesh, slice, &state).unwrap();
+            let mesh = graphics.device.create_mesh(vertex_data.as_slice());
 
-        let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
+            let state = DrawState::new().depth(Comparison::LessEqual, true);
 
-        Ok(SkinnedRenderer {
-            animation_clip: animation_clip,
-            skinning_transforms_buffer: skinning_transforms_buffer,
-            batch: batch,
-            shader_params: SkinnedShaderParams {
+            let slice = graphics.device
+                .create_buffer_static::<u32>(index_data.as_slice())
+                .to_slice(PrimitiveType::TriangleList);
+
+            let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
+
+            let texture = Texture::from_path(&mut graphics.device, &Path::new(&texture_paths[i])).unwrap();
+            let sampler = graphics.device.create_sampler(
+                SamplerInfo::new(
+                    FilterMethod::Trilinear,
+                    WrapMode::Clamp
+                    )
+                );
+
+            let shader_params = SkinnedShaderParams {
                 u_model_view_proj: mat4_id(),
                 u_model_view: mat4_id(),
                 u_skinning_transforms: skinning_transforms_buffer.raw(),
-            },
+                u_texture: (texture.handle, Some(sampler)),
+            };
+
+            let batch: RefBatch<SkinnedShaderParams<GlResources>> = graphics.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
+
+            render_batches.push(SkinnedRenderBatch {
+                batch: batch,
+                skinning_transforms_buffer: skinning_transforms_buffer,
+            });
+        }
+
+
+        Ok(SkinnedRenderer {
+            animation_clip: animation_clip,
+            render_batches: render_batches,
         })
     }
 
@@ -81,12 +108,14 @@ impl SkinnedRenderer {
         projection: [[f32; 4]; 4],
         elapsed_time: f32,
     ) {
-        self.shader_params.u_model_view = view;
-        self.shader_params.u_model_view_proj = projection;
+        for material in self.render_batches.iter_mut() {
+            material.batch.params.u_model_view = view;
+            material.batch.params.u_model_view_proj = projection;
 
-        let sample = self.animation_clip.sample_at_time(elapsed_time);
-        graphics.device.update_buffer(self.skinning_transforms_buffer.clone(), &sample.skinning_transforms[..], 0);
-        graphics.draw(&self.batch, &self.shader_params, frame).unwrap();
+            let sample = self.animation_clip.sample_at_time(elapsed_time);
+            graphics.device.update_buffer(material.skinning_transforms_buffer.clone(), &sample.skinning_transforms[..], 0);
+            graphics.draw(&material.batch, frame).unwrap();
+        }
     }
 }
 
@@ -95,6 +124,7 @@ struct SkinnedShaderParams<R: Resources> {
     u_model_view_proj: [[f32; 4]; 4],
     u_model_view: [[f32; 4]; 4],
     u_skinning_transforms: RawBufferHandle<R>,
+    u_texture: TextureParam<R>,
 }
 
 #[vertex_format]
@@ -138,6 +168,18 @@ impl SetAt for (TextureCoords, SkinnedVertex) {
     }
 }
 
+impl SetAt for (SkinningWeights, SkinnedVertex) {
+    fn set_at(SkinningWeights(joints, weights): SkinningWeights, vertex: &mut SkinnedVertex) {
+        vertex.joint_indices = [
+            joints[0] as i32,
+            joints[1] as i32,
+            joints[2] as i32,
+            joints[3] as i32,
+        ];
+        vertex.joint_weights = weights;
+    }
+}
+
 static SKINNED_VERTEX_SHADER: &'static [u8] = b"
     #version 150 core
 
@@ -160,7 +202,7 @@ static SKINNED_VERTEX_SHADER: &'static [u8] = b"
     out vec2 v_TexCoord;
 
     void main() {
-        v_TexCoord = uv;
+        v_TexCoord = vec2(uv.x, 1 - uv.y); // this feels like a bug with gfx?
 
         vec4 adjustedVertex;
         vec4 adjustedNormal;
@@ -189,57 +231,21 @@ static SKINNED_VERTEX_SHADER: &'static [u8] = b"
 static SKINNED_FRAGMENT_SHADER: &'static [u8] = b"
     #version 150
 
+    uniform sampler2D u_texture;
+
     in vec3 v_normal;
     out vec4 out_color;
 
     in vec2 v_TexCoord;
 
     void main() {
+        vec4 texColor = texture(u_texture, v_TexCoord);
+
         // unidirectional light in direction as camera
         vec3 light = vec3(0.0, 0.0, 1.0);
         light = normalize(light);
         float intensity = max(dot(v_normal, light), 0.0);
-        out_color = vec4(intensity, intensity, intensity, 1.0);
+
+        out_color = vec4(intensity, intensity, intensity, 1.0) * texColor;
     }
 ";
-
-fn bind_vertex(vertex: &mut SkinnedVertex, vtn_index: wobj::obj::VTNIndex, bind_data: &BindData, skeleton: &Skeleton) {
-
-    let vertex_weights: Vec<&VertexWeight> = bind_data.vertex_weights.iter()
-        .filter(|vw| vw.vertex == vtn_index.0)
-        .collect();
-
-    for (i, vertex_weight) in vertex_weights.iter().take(4).enumerate() {
-        let joint_name = &bind_data.joint_names[vertex_weight.joint as usize];
-        if let Some((joint_index, _)) = skeleton.joints.iter().enumerate()
-            .find(|&(_, j)| &j.name == joint_name)
-        {
-            vertex.joint_indices[i] = joint_index as i32;
-            vertex.joint_weights[i] = bind_data.weights[vertex_weight.weight];
-        }
-    }
-}
-
-///
-/// For each vertex, set joint_indices and joint_weights according to BindData
-/// TODO currently this is SUPER SLOW - probably need a combination of:
-///     - writing this less dumb
-///     - importing COLLADA file in a more convenient format
-///     - some kind of rudimentary asset pipeline with caching so we don't have to
-///       rebuild on every run
-///
-fn bind_vertices(vertices: &mut Vec<SkinnedVertex>, bind_data: &BindData, skeleton: &Skeleton, object: &Object) {
-
-    let mut vertex_index = 0;
-    for shape in object.geometry[0].shapes.iter() {
-        match shape {
-            &wobj::obj::Shape::Triangle(a, b, c) => {
-                bind_vertex(&mut vertices[vertex_index], a, bind_data, skeleton);
-                bind_vertex(&mut vertices[vertex_index + 1], b, bind_data, skeleton);
-                bind_vertex(&mut vertices[vertex_index + 2], c, bind_data, skeleton);
-                vertex_index += 3;
-            }
-            _ => {}
-        }
-    }
-}

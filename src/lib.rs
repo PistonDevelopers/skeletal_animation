@@ -14,6 +14,7 @@ extern crate quack;
 extern crate wavefront_obj;
 extern crate geometry;
 extern crate gfx_device_gl;
+extern crate gfx_texture;
 
 pub mod animation;
 pub mod skinned_renderer;

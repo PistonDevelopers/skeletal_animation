@@ -30,3 +30,6 @@ git = "https://github.com/pistondevelopers/quack"
 
 [dependencies.gfx_device_gl]
 git = "https://github.com/gfx-rs/gfx_device_gl"
+
+[dependencies.piston-gfx_texture]
+git = "https://github.com/pistondevelopers/gfx_texture.git"

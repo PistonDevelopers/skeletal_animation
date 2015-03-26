@@ -7,11 +7,13 @@ use gfx::batch::RefBatch;
 use gfx::shade::TextureParam;
 use gfx::state::Comparison;
 use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
-use gfx::{ BufferHandle, BufferUsage, Device, DeviceExt, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, ToSlice, RawBufferHandle };
+use gfx::traits::*;
+use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
 use gfx_device_gl::{ GlDevice, GlResources };
 use gfx_texture::{ Texture };
 use quack::{ SetAt };
 use std::default::Default;
+use std::old_path::*;
 use vecmath::*;
 use wavefront_obj as wobj;
 use wavefront_obj::obj::Object;
@@ -65,7 +67,7 @@ impl SkinnedRenderer {
             let state = DrawState::new().depth(Comparison::LessEqual, true);
 
             let slice = graphics.device
-                .create_buffer_static::<u32>(index_data.as_slice())
+                .create_buffer_index::<u32>(index_data.as_slice())
                 .to_slice(PrimitiveType::TriangleList);
 
             let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
@@ -81,7 +83,7 @@ impl SkinnedRenderer {
             let shader_params = SkinnedShaderParams {
                 u_model_view_proj: mat4_id(),
                 u_model_view: mat4_id(),
-                u_skinning_transforms: skinning_transforms_buffer.raw(),
+                u_skinning_transforms: skinning_transforms_buffer.raw().clone(),
                 u_texture: (texture.handle, Some(sampler)),
             };
 
@@ -113,7 +115,7 @@ impl SkinnedRenderer {
             material.batch.params.u_model_view_proj = projection;
 
             let sample = self.animation_clip.sample_at_time(elapsed_time);
-            graphics.device.update_buffer(material.skinning_transforms_buffer.clone(), &sample.skinning_transforms[..], 0);
+            graphics.device.update_buffer(&material.skinning_transforms_buffer, &sample.skinning_transforms[..], 0);
             graphics.draw(&material.batch, frame).unwrap();
         }
     }

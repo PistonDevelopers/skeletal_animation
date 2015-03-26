@@ -42,7 +42,7 @@ impl<D: Device> AnimationClip<D> {
         // Assuming constant sample rate
         let samples_per_second = sample_count as f32 / duration;
 
-        let samples = range(0, sample_count).map(|sample_index| {
+        let samples = (0 .. sample_count).map(|sample_index| {
 
             // Grab local poses for each joint from COLLADA animation if available,
             // falling back to identity matrix

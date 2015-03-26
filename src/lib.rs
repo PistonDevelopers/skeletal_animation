@@ -1,4 +1,6 @@
 #![feature(core)]
+#![feature(old_path)]
+#![feature(custom_attribute)]
 #![feature(plugin)]
 #![plugin(gfx_macros)]
 

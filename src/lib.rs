@@ -1,6 +1,6 @@
 #![feature(core)]
-#![feature(old_path)]
 #![feature(custom_attribute)]
+#![feature(old_path)]
 #![feature(plugin)]
 #![plugin(gfx_macros)]
 
@@ -17,9 +17,12 @@ extern crate wavefront_obj;
 extern crate geometry;
 extern crate gfx_device_gl;
 extern crate gfx_texture;
+extern crate quaternion;
+
 
 pub mod animation;
 pub mod skinned_renderer;
+mod math;
 
 pub use animation::{ AnimationClip, AnimationSample };
 pub use skinned_renderer::SkinnedRenderer;

@@ -13,6 +13,9 @@ git = "https://github.com/PistonDevelopers/gfx-debug-draw"
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"
 
+[dependencies.quaternion]
+git = "https://github.com/PistonDevelopers/quaternion"
+
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
 
@@ -33,3 +36,6 @@ git = "https://github.com/gfx-rs/gfx_device_gl"
 
 [dependencies.piston-gfx_texture]
 git = "https://github.com/pistondevelopers/gfx_texture.git"
+
+#[dependencies.cgmath]
+#git = "https://github.com/bjz/cgmath-rs"

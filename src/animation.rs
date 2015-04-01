@@ -2,10 +2,15 @@ use collada::Animation as ColladaAnim;
 use collada::Skeleton;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use vecmath::{Matrix4, mat4_id, row_mat4_transform, row_mat4_mul};
+use std::num::Float;
+use vecmath::{Vector3, Matrix4, mat4_id, row_mat4_transform, row_mat4_mul, mat4_transposed};
+use quaternion::id as quaternion_id;
+use quaternion::Quaternion;
 
 use gfx::{Device};
 use gfx_debug_draw::DebugRenderer;
+
+use math::{quaternion_to_matrix, matrix_to_quaternion};
 
 #[derive(Debug)]
 pub struct AnimationClip<D: Device> {
@@ -48,12 +53,25 @@ impl<D: Device> AnimationClip<D> {
             // falling back to identity matrix
             let local_poses: Vec<Matrix4<f32>> = skeleton.joints.iter().map(|joint| {
                 match joint_animations.get(&joint.name[..]) {
-                    Some(a) => a.sample_poses[sample_index],
+                    Some(a) => a.sample_poses[sample_index], // convert col major to row major
                     None => mat4_id(),
                 }
             }).collect();
 
-            let global_poses = calculate_global_poses(&skeleton, &local_poses);
+            // Convert local poses to SQT (for interpolation)
+            let local_poses: Vec<SQT> = local_poses.iter().map(|pose_matrix| {
+                SQT {
+                    translation: [
+                        pose_matrix[0][3],
+                        pose_matrix[1][3],
+                        pose_matrix[2][3],
+                    ],
+                    scale: 1.0, // TODO don't assume?
+                    rotation: matrix_to_quaternion(pose_matrix),
+                }
+            }).collect();
+
+            let global_poses = calculate_global_poses_sqt(&skeleton, &local_poses);
             let skinning_transforms = calculate_skinning_transforms(&skeleton, &global_poses);
 
             AnimationSample {
@@ -79,9 +97,6 @@ fn calculate_skinning_transforms(
     use std::f32::consts::PI;
     use std::num::{Float};
 
-    // TODO do rotation as step in collada importer
-
-    /*
     let rotate_on_x_inv =
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -89,10 +104,8 @@ fn calculate_skinning_transforms(
         [0.0, (PI/2.0).sin(), (-PI/2.0).cos(), 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ];
-    */
 
     skeleton.joints.iter().enumerate().map(|(i, joint)| {
-        //let inverse_bind_pose = row_mat4_mul(joint.inverse_bind_pose, rotate_on_x_inv);
         let inverse_bind_pose = row_mat4_mul(joint.inverse_bind_pose, mat4_id());
         row_mat4_mul(global_poses[i], inverse_bind_pose)
     }).collect()
@@ -106,7 +119,6 @@ fn calculate_global_poses(
     use std::f32::consts::PI;
     use std::num::{Float};
 
-    /*
     let rotate_on_x =
     [
         [1.0, 0.0, 0.0, 0.0],
@@ -114,7 +126,6 @@ fn calculate_global_poses(
         [0.0, (-PI/2.0).sin(), (PI/2.0).cos(), 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ];
-    */
 
     let mut global_poses: Vec<Matrix4<f32>> = Vec::new();
 
@@ -127,9 +138,10 @@ fn calculate_global_poses(
             // we need to do a PI/2 rotation around x axis
             // to adjust for that
             // TODO do this as step in collada importer
-            //rotate_on_x
-            mat4_id()
+            rotate_on_x
         };
+
+        let m = row_mat4_mul(parent_pose, local_poses[joint_index]);
 
         global_poses.push(row_mat4_mul(
             parent_pose,
@@ -140,10 +152,66 @@ fn calculate_global_poses(
     global_poses
 }
 
-pub struct SQTTransform {
-    translation: [f32; 3],
+fn calculate_global_poses_sqt(
+    skeleton: &Skeleton,
+    local_poses: &Vec<SQT>,
+) -> Vec<Matrix4<f32>> {
+
+    use std::f32::consts::PI;
+    use std::num::{Float};
+
+    let rotate_on_x =
+    [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, (PI/2.0).cos(), (PI/2.0).sin(), 0.0],
+        [0.0, (-PI/2.0).sin(), (PI/2.0).cos(), 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ];
+
+    let mut global_poses: Vec<Matrix4<f32>> = Vec::new();
+
+    for (joint_index, joint) in skeleton.joints.iter().enumerate() {
+
+        let parent_pose = if !joint.is_root() {
+            global_poses[joint.parent_index as usize]
+        } else {
+            rotate_on_x
+        };
+
+        let local_pose_sqt = &local_poses[joint_index];
+
+        let mut local_pose = quaternion_to_matrix(local_pose_sqt.rotation);
+
+        local_pose[0][3] = local_pose_sqt.translation[0];
+        local_pose[1][3] = local_pose_sqt.translation[1];
+        local_pose[2][3] = local_pose_sqt.translation[2];
+
+        global_poses.push(row_mat4_mul(parent_pose, local_pose));
+    }
+
+    global_poses
+}
+
+///
+/// SQT - (Scale, Quaternion, Translation)
+/// Transformation represented by separate scaling, translation, and rotation factors
+/// Necessary for rotational interpolation
+///
+#[derive(Debug)]
+pub struct SQT
+{
+    ///
+    /// 3D Translation
+    ///
+    translation: Vector3<f32>,
+    ///
+    /// Uniform scale factor.
+    ///
     scale: f32,
-    rotation: [f32; 4],
+    ///
+    /// Rotation
+    ///
+    rotation: Quaternion<f32>
 }
 
 #[derive(Debug)]
@@ -153,8 +221,7 @@ pub struct AnimationSample<D: Device>
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
     ///
-    local_poses: Vec<Matrix4<f32>>,
-    //local_poses_sqt: Vec<SQTTransform>,
+    local_poses: Vec<SQT>,
 
     ///
     /// Global pose transforms for each joint in the targeted skeleton

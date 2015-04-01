@@ -13,10 +13,10 @@ use gfx_device_gl::{ GlDevice, GlResources };
 use gfx_texture::{ Texture };
 use quack::{ SetAt };
 use std::default::Default;
-use std::old_path::*;
+use std::path::Path;
 use vecmath::*;
 use wavefront_obj as wobj;
-use wavefront_obj::obj::Object;
+use wavefront_obj::obj::{ Object, VTNIndex };
 
 use animation::AnimationClip;
 
@@ -30,6 +30,71 @@ pub struct SkinnedRenderer {
     animation_clip: AnimationClip<GlDevice>,
     render_batches: Vec<SkinnedRenderBatch>,
 }
+
+///
+/// TEMP - Rust nightly doesn't like geometry::Object::add_object ...
+/// So we'll just do it ourselves here..
+///
+
+fn vtn_to_vertex(a: VTNIndex, obj: &wobj::obj::Object) -> SkinnedVertex
+{
+    let mut vertex: SkinnedVertex = Default::default();
+    let position = obj.vertices[a.0];
+
+    vertex.pos = [position.x as f32, position.y as f32, position.z as f32];
+
+    if obj.joint_weights.len() == obj.vertices.len() {
+        let weights = obj.joint_weights[a.0];
+        vertex.joint_weights = weights.weights;
+        vertex.joint_indices = [
+            weights.joints[0] as i32,
+            weights.joints[1] as i32,
+            weights.joints[2] as i32,
+            weights.joints[3] as i32,
+        ];
+    }
+
+    if let Some(uv) = a.1 {
+        let uv = obj.tex_vertices[uv];
+        vertex.uv = [uv.x as f32, uv.y as f32];
+    }
+
+    if let Some(normal) = a.2 {
+        let normal = obj.normals[normal];
+        vertex.normal = [normal.x as f32, normal.y as f32, normal.z as f32];
+    }
+
+    vertex
+}
+
+fn get_vertex_index_data(obj: &Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
+    for geom in obj.geometry.iter() {
+        let start = index_data.len();
+        let mut i = vertex_data.len() as u32;
+        let mut uvs: u32 = 0;
+        let mut normals: u32 = 0;
+        {
+            let mut add = |a: VTNIndex| {
+                if let Some(_) = a.1 { uvs += 1; }
+                if let Some(_) = a.2 { normals += 1; }
+                vertex_data.push(vtn_to_vertex(a, obj));
+                index_data.push(i);
+                i += 1;
+            };
+            for shape in geom.shapes.iter() {
+                match shape {
+                    &wobj::obj::Shape::Triangle(a, b, c) => {
+                        add(a);
+                        add(b);
+                        add(c);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
 
 impl SkinnedRenderer {
 
@@ -45,9 +110,10 @@ impl SkinnedRenderer {
         };
 
         let obj_set = collada_document.get_obj_set().unwrap();
-        let skeleton_set = collada_document.get_skeletons().unwrap();
-        let animations = collada_document.get_animations();
-        let skeleton = &skeleton_set[0];
+
+        let mut skeleton_set = collada_document.get_skeletons().unwrap();
+        let mut animations = collada_document.get_animations();
+        let mut skeleton = &skeleton_set[0];
 
         let animation_clip = AnimationClip::from_collada(skeleton, &animations);
 
@@ -60,7 +126,7 @@ impl SkinnedRenderer {
             let mut geometry_data: Geometry = Geometry::new();
             let mut objects = GeometryObject::new();
 
-            GeometryObject::add_object(&object, &mut vertex_data, &mut index_data, &mut geometry_data);
+            get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
             let mesh = graphics.device.create_mesh(vertex_data.as_slice());
 

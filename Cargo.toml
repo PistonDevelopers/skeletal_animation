@@ -22,9 +22,6 @@ git = "https://github.com/gfx-rs/gfx-rs"
 [dependencies.gfx_macros]
 git = "https://github.com/gfx-rs/gfx_macros"
 
-[dependencies.wavefront_obj]
-git = "https://github.com/PistonDevelopers/wavefront_obj"
-
 [dependencies.geometry]
 git = "https://github.com/PistonDevelopers/geometry.git"
 
@@ -36,6 +33,3 @@ git = "https://github.com/gfx-rs/gfx_device_gl"
 
 [dependencies.piston-gfx_texture]
 git = "https://github.com/pistondevelopers/gfx_texture.git"
-
-#[dependencies.cgmath]
-#git = "https://github.com/bjz/cgmath-rs"

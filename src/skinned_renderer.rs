@@ -1,8 +1,8 @@
 use collada::document::ColladaDocument;
-use collada::{BindData, VertexWeight, Skeleton};
+use collada::{self, BindData, VertexWeight, Skeleton};
 use geometry::Object as GeometryObject;
 use geometry::Model as GeometryModel;
-use geometry::{ Position, TextureCoords, Normal, SkinningWeights, Geometry };
+use geometry::{ Position, TextureCoords, Normal, Geometry };
 use gfx::batch::RefBatch;
 use gfx::shade::TextureParam;
 use gfx::state::Comparison;
@@ -15,8 +15,6 @@ use quack::{ SetAt };
 use std::default::Default;
 use std::path::Path;
 use vecmath::*;
-use wavefront_obj as wobj;
-use wavefront_obj::obj::{ Object, VTNIndex };
 
 use animation::AnimationClip;
 
@@ -36,7 +34,7 @@ pub struct SkinnedRenderer {
 /// So we'll just do it ourselves here..
 ///
 
-fn vtn_to_vertex(a: VTNIndex, obj: &wobj::obj::Object) -> SkinnedVertex
+fn vtn_to_vertex(a: collada::VTNIndex, obj: &collada::Object) -> SkinnedVertex
 {
     let mut vertex: SkinnedVertex = Default::default();
     let position = obj.vertices[a.0];
@@ -67,14 +65,14 @@ fn vtn_to_vertex(a: VTNIndex, obj: &wobj::obj::Object) -> SkinnedVertex
     vertex
 }
 
-fn get_vertex_index_data(obj: &Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
+fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
     for geom in obj.geometry.iter() {
         let start = index_data.len();
         let mut i = vertex_data.len() as u32;
         let mut uvs: u32 = 0;
         let mut normals: u32 = 0;
         {
-            let mut add = |a: VTNIndex| {
+            let mut add = |a: collada::VTNIndex| {
                 if let Some(_) = a.1 { uvs += 1; }
                 if let Some(_) = a.2 { normals += 1; }
                 vertex_data.push(vtn_to_vertex(a, obj));
@@ -83,7 +81,7 @@ fn get_vertex_index_data(obj: &Object, vertex_data: &mut Vec<SkinnedVertex>, ind
             };
             for shape in geom.shapes.iter() {
                 match shape {
-                    &wobj::obj::Shape::Triangle(a, b, c) => {
+                    &collada::Shape::Triangle(a, b, c) => {
                         add(a);
                         add(b);
                         add(c);
@@ -233,18 +231,6 @@ impl SetAt for (Normal, SkinnedVertex) {
 impl SetAt for (TextureCoords, SkinnedVertex) {
     fn set_at(TextureCoords(coords): TextureCoords, vertex: &mut SkinnedVertex) {
         vertex.uv = coords;
-    }
-}
-
-impl SetAt for (SkinningWeights, SkinnedVertex) {
-    fn set_at(SkinningWeights(joints, weights): SkinningWeights, vertex: &mut SkinnedVertex) {
-        vertex.joint_indices = [
-            joints[0] as i32,
-            joints[1] as i32,
-            joints[2] as i32,
-            joints[3] as i32,
-        ];
-        vertex.joint_weights = weights;
     }
 }
 

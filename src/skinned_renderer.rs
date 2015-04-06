@@ -6,23 +6,27 @@ use gfx::state::Comparison;
 use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
 use gfx::traits::*;
 use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
-use gfx_device_gl::{ GlDevice, GlResources };
+use gfx_debug_draw::DebugRenderer;
+use gfx_device_gl::Device as GlDevice;
+use gfx_device_gl::Resources as GlResources;
+use gfx_device_gl::Factory as GlFactory;
 use gfx_texture::{ self, Texture };
 use quack::{ SetAt };
 use std::default::Default;
 use std::path::Path;
 use vecmath::*;
 
-use animation::AnimationClip;
+use animation::{AnimationClip, calculate_global_poses, calculate_skinning_transforms, SQT};
 
-static MAX_JOINTS: usize = 64;
+const MAX_JOINTS: usize = 64;
 
 pub struct SkinnedRenderBatch {
     skinning_transforms_buffer: BufferHandle<GlResources, [[f32; 4]; 4]>,
     batch: RefBatch<SkinnedShaderParams<GlResources>>,
 }
 pub struct SkinnedRenderer {
-    animation_clip: AnimationClip<GlDevice>,
+    animation_clip: AnimationClip,
+    skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch>,
 }
 
@@ -94,12 +98,12 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
 impl SkinnedRenderer {
 
     pub fn from_collada(
-        graphics: &mut Graphics<GlDevice>,
+        graphics: &mut Graphics<GlDevice, GlFactory>,
         collada_document: ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
     ) -> Result<SkinnedRenderer, ProgramError> {
 
-        let program = match graphics.device.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
+        let program = match graphics.factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
             Ok(program_handle) => program_handle,
             Err(e) => return Err(e),
         };
@@ -121,23 +125,23 @@ impl SkinnedRenderer {
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let mesh = graphics.device.create_mesh(vertex_data.as_slice());
+            let mesh = graphics.factory.create_mesh(vertex_data.as_slice());
 
             let state = DrawState::new().depth(Comparison::LessEqual, true);
 
-            let slice = graphics.device
+            let slice = graphics.factory
                 .create_buffer_index::<u32>(index_data.as_slice())
                 .to_slice(PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
+            let skinning_transforms_buffer = graphics.factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
 
             let texture = Texture::from_path(
-                &mut graphics.device,
+                &mut graphics.factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
 
-            let sampler = graphics.device.create_sampler(
+            let sampler = graphics.factory.create_sampler(
                 SamplerInfo::new(
                     FilterMethod::Trilinear,
                     WrapMode::Clamp
@@ -163,12 +167,13 @@ impl SkinnedRenderer {
         Ok(SkinnedRenderer {
             animation_clip: animation_clip,
             render_batches: render_batches,
+            skeleton: skeleton.clone(),
         })
     }
 
     pub fn render(
         &mut self,
-        graphics: &mut Graphics<GlDevice>,
+        graphics: &mut Graphics<GlDevice, GlFactory>,
         frame: &Frame<GlResources>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
@@ -178,9 +183,99 @@ impl SkinnedRenderer {
             material.batch.params.u_model_view = view;
             material.batch.params.u_model_view_proj = projection;
 
-            let sample = self.animation_clip.sample_at_time(elapsed_time);
-            graphics.device.update_buffer(&material.skinning_transforms_buffer, &sample.skinning_transforms[..], 0);
+            let mut local_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; MAX_JOINTS ];
+
+            self.animation_clip.get_interpolated_poses_at_time(elapsed_time, &mut local_poses[0 .. self.skeleton.joints.len()]);
+
+            // uses skeletal hierarchy to calculate global poses from the given local pose
+            let global_poses = calculate_global_poses(&self.skeleton, &local_poses);
+
+            // multiplies joint global poses with their inverse-bind-pose
+            let skinning_transforms = calculate_skinning_transforms(&self.skeleton, &global_poses);
+
+            graphics.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
             graphics.draw(&material.batch, frame).unwrap();
+        }
+    }
+
+    pub fn render_skeleton(&self, debug_renderer: &mut DebugRenderer<GlDevice, GlFactory>, elapsed_time: f32, draw_labels: bool) {
+
+        let mut local_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; MAX_JOINTS ];
+        self.animation_clip.get_interpolated_poses_at_time(elapsed_time, &mut local_poses[0 .. self.skeleton.joints.len()]);
+        let global_poses = calculate_global_poses(&self.skeleton, &local_poses);
+
+        for (joint_index, joint) in self.skeleton.joints.iter().enumerate() {
+
+            let joint_position = row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
+
+            let leaf_end = row_mat4_transform(
+                global_poses[joint_index],
+                [0.0, 1.0, 0.0, 1.0]
+                );
+
+            if !joint.is_root() {
+                let parent_position = row_mat4_transform(global_poses[joint.parent_index as usize], [0.0, 0.0, 0.0, 1.0]);
+
+                // Draw bone (between joint and parent joint)
+
+                debug_renderer.draw_line(
+                    [parent_position[0], parent_position[1], parent_position[2]],
+                    [joint_position[0], joint_position[1], joint_position[2]],
+                    [0.2, 0.2, 0.2, 1.0]
+                    );
+
+                if !self.skeleton.joints.iter().any(|j| j.parent_index as usize == joint_index) {
+
+                    // Draw extension along joint's y-axis...
+                    debug_renderer.draw_line(
+                        [joint_position[0], joint_position[1], joint_position[2]],
+                        [leaf_end[0], leaf_end[1], leaf_end[2]],
+                        [0.2, 0.2, 0.2, 1.0]
+                        );
+                }
+            }
+
+            if draw_labels {
+                // Label joint
+                debug_renderer.draw_text_at_position(
+                    &joint.name[..],
+                    [leaf_end[0], leaf_end[1], leaf_end[2]],
+                    [1.0, 1.0, 1.0, 1.0]);
+            }
+
+            // Draw joint-relative axes
+            let p_x_axis = row_mat4_transform(
+                global_poses[joint_index],
+                [1.0, 0.0, 0.0, 1.0]
+            );
+
+            let p_y_axis = row_mat4_transform(
+                global_poses[joint_index],
+                [0.0, 1.0, 0.0, 1.0]
+            );
+
+            let p_z_axis = row_mat4_transform(
+                global_poses[joint_index],
+                [0.0, 0.0, 1.0, 1.0]
+            );
+
+            debug_renderer.draw_line(
+                [joint_position[0], joint_position[1], joint_position[2]],
+                [p_x_axis[0], p_x_axis[1], p_x_axis[2]],
+                [1.0, 0.2, 0.2, 1.0]
+            );
+
+            debug_renderer.draw_line(
+                [joint_position[0], joint_position[1], joint_position[2]],
+                [p_y_axis[0], p_y_axis[1], p_y_axis[2]],
+                [0.2, 1.0, 0.2, 1.0]
+            );
+
+            debug_renderer.draw_line(
+                [joint_position[0], joint_position[1], joint_position[2]],
+                [p_z_axis[0], p_z_axis[1], p_z_axis[2]],
+                [0.2, 0.2, 1.0, 1.0]
+            );
         }
     }
 }

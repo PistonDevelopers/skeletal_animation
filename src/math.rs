@@ -4,6 +4,7 @@ use quaternion::Quaternion;
 ///
 /// Adapted from Id Software's DOOM III source
 /// https://github.com/id-Software/DOOM-3-BFG/blob/9c37079c16015fc58de29d3de366e0d93dc11f8a/neo/idlib/math/Matrix.cpp#L168
+/// FIXME - still getting wierd popping... :(
 ///
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
 

@@ -1,3 +1,4 @@
+#![feature(collections)]
 #![feature(core)]
 #![feature(custom_attribute)]
 #![feature(old_path)]
@@ -14,6 +15,7 @@ extern crate gfx_texture;
 extern crate quack;
 extern crate quaternion;
 extern crate vecmath;
+extern crate interpolation;
 
 // TODO - 'SkinnedRenderer' probably belongs in its own crate,
 // then we wouldn't need the following dependencies here

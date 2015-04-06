@@ -22,9 +22,6 @@ git = "https://github.com/gfx-rs/gfx-rs"
 [dependencies.gfx_macros]
 git = "https://github.com/gfx-rs/gfx_macros"
 
-[dependencies.geometry]
-git = "https://github.com/PistonDevelopers/geometry.git"
-
 [dependencies.quack]
 git = "https://github.com/pistondevelopers/quack"
 

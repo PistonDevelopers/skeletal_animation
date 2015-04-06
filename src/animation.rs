@@ -8,10 +8,55 @@ use quaternion::id as quaternion_id;
 use quaternion::Quaternion;
 
 use gfx::{Device};
+use gfx_debug_draw::DebugRenderer;
+
+use gfx_device_gl::Device as GlDevice;
+use gfx_device_gl::Factory as GlFactory;
 
 use math::{quaternion_to_matrix, matrix_to_quaternion};
 
 use interpolation::{Spatial, lerp};
+
+pub trait BlendTreeNode {
+    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]);
+}
+
+pub struct LerpNode<'a> {
+    pub blend_parameter: f32,
+    pub inputs: [&'a BlendTreeNode; 2],
+}
+
+impl<'a> BlendTreeNode for LerpNode<'a> {
+    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]) {
+
+        let mut input_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+
+        let sample_count = output_poses.len();
+
+        self.inputs[0].get_output_pose(elapsed_time, &mut input_poses[0 .. sample_count]);
+        self.inputs[1].get_output_pose(elapsed_time, output_poses);
+
+        for i in (0 .. output_poses.len()) {
+            let pose_1 = input_poses[i];
+            let pose_2 = &mut output_poses[i];
+            pose_2.scale = lerp(&pose_1.scale, &pose_2.scale, &self.blend_parameter);
+            pose_2.translation = lerp(&pose_1.translation, &pose_2.translation, &self.blend_parameter);
+            pose_2.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &self.blend_parameter);
+        }
+
+    }
+}
+
+pub struct ClipNode<'a> {
+    pub start_time: f32,
+    pub clip: &'a AnimationClip,
+}
+
+impl<'a> BlendTreeNode for ClipNode<'a> {
+    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]) {
+        self.clip.get_interpolated_poses_at_time(elapsed_time, output_poses);
+    }
+}
 
 #[derive(Debug)]
 pub struct AnimationClip {
@@ -44,6 +89,14 @@ impl AnimationClip {
     pub fn sample_at_time(&self, elapsed_time: f32) -> &AnimationSample {
         let sample_index = (elapsed_time * self.samples_per_second) as usize % self.samples.len();
         &self.samples[sample_index]
+    }
+
+    ///
+    /// Sets sample_per_second such that the animation will have the given
+    /// duration
+    ///
+    pub fn set_duration(&mut self, duration: f32) {
+        self.samples_per_second = self.samples.len() as f32 / duration;
     }
 
     pub fn get_interpolated_poses_at_time(&self, elapsed_time: f32, blended_poses: &mut [SQT]) {
@@ -145,22 +198,6 @@ impl AnimationClip {
 ///
 /// FIXME - don't allocate a new Vec!
 ///
-pub fn calculate_skinning_transforms(
-    skeleton: &Skeleton,
-    global_poses: &Vec<Matrix4<f32>>,
-) -> Vec<Matrix4<f32>> {
-
-    use std::f32::consts::PI;
-    use std::num::{Float};
-
-    skeleton.joints.iter().enumerate().map(|(i, joint)| {
-        row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
-    }).collect()
-}
-
-///
-/// FIXME - don't allocate a new Vec!
-///
 pub fn calculate_global_poses(
     skeleton: &Skeleton,
     local_poses: &[SQT],
@@ -188,6 +225,83 @@ pub fn calculate_global_poses(
     }
 
     global_poses
+}
+
+pub fn draw_skeleton(skeleton: &Skeleton, global_poses: &Vec<Matrix4<f32>>, debug_renderer: &mut DebugRenderer<GlDevice, GlFactory>, draw_labels: bool) {
+    for (joint_index, joint) in skeleton.joints.iter().enumerate() {
+
+        let joint_position = row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
+
+        let leaf_end = row_mat4_transform(
+            global_poses[joint_index],
+            [0.0, 1.0, 0.0, 1.0]
+        );
+
+        if !joint.is_root() {
+            let parent_position = row_mat4_transform(global_poses[joint.parent_index as usize], [0.0, 0.0, 0.0, 1.0]);
+
+            // Draw bone (between joint and parent joint)
+
+            debug_renderer.draw_line(
+                [parent_position[0], parent_position[1], parent_position[2]],
+                [joint_position[0], joint_position[1], joint_position[2]],
+                [0.2, 0.2, 0.2, 1.0]
+            );
+
+            if !skeleton.joints.iter().any(|j| j.parent_index as usize == joint_index) {
+
+                // Draw extension along joint's y-axis...
+                debug_renderer.draw_line(
+                    [joint_position[0], joint_position[1], joint_position[2]],
+                    [leaf_end[0], leaf_end[1], leaf_end[2]],
+                    [0.2, 0.2, 0.2, 1.0]
+                );
+            }
+        }
+
+        if draw_labels {
+            // Label joint
+            debug_renderer.draw_text_at_position(
+                &joint.name[..],
+                [leaf_end[0], leaf_end[1], leaf_end[2]],
+                [1.0, 1.0, 1.0, 1.0]
+            );
+        }
+
+        // Draw joint-relative axes
+        let p_x_axis = row_mat4_transform(
+            global_poses[joint_index],
+            [1.0, 0.0, 0.0, 1.0]
+        );
+
+        let p_y_axis = row_mat4_transform(
+            global_poses[joint_index],
+            [0.0, 1.0, 0.0, 1.0]
+        );
+
+        let p_z_axis = row_mat4_transform(
+            global_poses[joint_index],
+            [0.0, 0.0, 1.0, 1.0]
+        );
+
+        debug_renderer.draw_line(
+            [joint_position[0], joint_position[1], joint_position[2]],
+            [p_x_axis[0], p_x_axis[1], p_x_axis[2]],
+            [1.0, 0.2, 0.2, 1.0]
+        );
+
+        debug_renderer.draw_line(
+            [joint_position[0], joint_position[1], joint_position[2]],
+            [p_y_axis[0], p_y_axis[1], p_y_axis[2]],
+            [0.2, 1.0, 0.2, 1.0]
+        );
+
+        debug_renderer.draw_line(
+            [joint_position[0], joint_position[1], joint_position[2]],
+            [p_z_axis[0], p_z_axis[1], p_z_axis[2]],
+            [0.2, 0.2, 1.0, 1.0]
+        );
+    }
 }
 
 ///

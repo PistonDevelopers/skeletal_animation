@@ -6,17 +6,13 @@ use gfx::state::Comparison;
 use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
 use gfx::traits::*;
 use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
-use gfx_debug_draw::DebugRenderer;
 use gfx_device_gl::Device as GlDevice;
 use gfx_device_gl::Resources as GlResources;
 use gfx_device_gl::Factory as GlFactory;
 use gfx_texture::{ self, Texture };
-use quack::{ SetAt };
 use std::default::Default;
 use std::path::Path;
 use vecmath::*;
-
-use animation::{AnimationClip, calculate_global_poses, calculate_skinning_transforms, SQT};
 
 const MAX_JOINTS: usize = 64;
 
@@ -24,8 +20,8 @@ pub struct SkinnedRenderBatch {
     skinning_transforms_buffer: BufferHandle<GlResources, [[f32; 4]; 4]>,
     batch: RefBatch<SkinnedShaderParams<GlResources>>,
 }
+
 pub struct SkinnedRenderer {
-    animation_clip: AnimationClip,
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch>,
 }
@@ -94,7 +90,6 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
     }
 }
 
-
 impl SkinnedRenderer {
 
     pub fn from_collada(
@@ -114,14 +109,13 @@ impl SkinnedRenderer {
         let mut animations = collada_document.get_animations();
         let mut skeleton = &skeleton_set[0];
 
-        let animation_clip = AnimationClip::from_collada(skeleton, &animations);
-
         let mut render_batches = Vec::new();
 
         for (i, object) in obj_set.objects.iter().enumerate().take(6) {
 
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
             let mut index_data: Vec<u32> = Vec::new();
+
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
@@ -165,7 +159,6 @@ impl SkinnedRenderer {
 
 
         Ok(SkinnedRenderer {
-            animation_clip: animation_clip,
             render_batches: render_batches,
             skeleton: skeleton.clone(),
         })
@@ -177,106 +170,33 @@ impl SkinnedRenderer {
         frame: &Frame<GlResources>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        elapsed_time: f32,
+        joint_poses: &[Matrix4<f32>]
     ) {
+
+        let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
+
         for material in self.render_batches.iter_mut() {
             material.batch.params.u_model_view = view;
             material.batch.params.u_model_view_proj = projection;
 
-            let mut local_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; MAX_JOINTS ];
-
-            self.animation_clip.get_interpolated_poses_at_time(elapsed_time, &mut local_poses[0 .. self.skeleton.joints.len()]);
-
-            // uses skeletal hierarchy to calculate global poses from the given local pose
-            let global_poses = calculate_global_poses(&self.skeleton, &local_poses);
-
-            // multiplies joint global poses with their inverse-bind-pose
-            let skinning_transforms = calculate_skinning_transforms(&self.skeleton, &global_poses);
-
+            // FIXME -- should all be able to share the same buffer
             graphics.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+
             graphics.draw(&material.batch, frame).unwrap();
         }
     }
 
-    pub fn render_skeleton(&self, debug_renderer: &mut DebugRenderer<GlDevice, GlFactory>, elapsed_time: f32, draw_labels: bool) {
+    ///
+    /// TODO - don't allocate a new vector
+    ///
+    pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
 
-        let mut local_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; MAX_JOINTS ];
-        self.animation_clip.get_interpolated_poses_at_time(elapsed_time, &mut local_poses[0 .. self.skeleton.joints.len()]);
-        let global_poses = calculate_global_poses(&self.skeleton, &local_poses);
+        use std::f32::consts::PI;
+        use std::num::{Float};
 
-        for (joint_index, joint) in self.skeleton.joints.iter().enumerate() {
-
-            let joint_position = row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
-
-            let leaf_end = row_mat4_transform(
-                global_poses[joint_index],
-                [0.0, 1.0, 0.0, 1.0]
-                );
-
-            if !joint.is_root() {
-                let parent_position = row_mat4_transform(global_poses[joint.parent_index as usize], [0.0, 0.0, 0.0, 1.0]);
-
-                // Draw bone (between joint and parent joint)
-
-                debug_renderer.draw_line(
-                    [parent_position[0], parent_position[1], parent_position[2]],
-                    [joint_position[0], joint_position[1], joint_position[2]],
-                    [0.2, 0.2, 0.2, 1.0]
-                    );
-
-                if !self.skeleton.joints.iter().any(|j| j.parent_index as usize == joint_index) {
-
-                    // Draw extension along joint's y-axis...
-                    debug_renderer.draw_line(
-                        [joint_position[0], joint_position[1], joint_position[2]],
-                        [leaf_end[0], leaf_end[1], leaf_end[2]],
-                        [0.2, 0.2, 0.2, 1.0]
-                        );
-                }
-            }
-
-            if draw_labels {
-                // Label joint
-                debug_renderer.draw_text_at_position(
-                    &joint.name[..],
-                    [leaf_end[0], leaf_end[1], leaf_end[2]],
-                    [1.0, 1.0, 1.0, 1.0]);
-            }
-
-            // Draw joint-relative axes
-            let p_x_axis = row_mat4_transform(
-                global_poses[joint_index],
-                [1.0, 0.0, 0.0, 1.0]
-            );
-
-            let p_y_axis = row_mat4_transform(
-                global_poses[joint_index],
-                [0.0, 1.0, 0.0, 1.0]
-            );
-
-            let p_z_axis = row_mat4_transform(
-                global_poses[joint_index],
-                [0.0, 0.0, 1.0, 1.0]
-            );
-
-            debug_renderer.draw_line(
-                [joint_position[0], joint_position[1], joint_position[2]],
-                [p_x_axis[0], p_x_axis[1], p_x_axis[2]],
-                [1.0, 0.2, 0.2, 1.0]
-            );
-
-            debug_renderer.draw_line(
-                [joint_position[0], joint_position[1], joint_position[2]],
-                [p_y_axis[0], p_y_axis[1], p_y_axis[2]],
-                [0.2, 1.0, 0.2, 1.0]
-            );
-
-            debug_renderer.draw_line(
-                [joint_position[0], joint_position[1], joint_position[2]],
-                [p_z_axis[0], p_z_axis[1], p_z_axis[2]],
-                [0.2, 0.2, 1.0, 1.0]
-            );
-        }
+        self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
+            row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
+        }).collect()
     }
 }
 

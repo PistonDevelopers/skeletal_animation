@@ -24,5 +24,14 @@ pub mod animation;
 pub mod skinned_renderer;
 mod math;
 
-pub use animation::{ AnimationClip, AnimationSample };
+pub use animation::{
+    AnimationClip,
+    AnimationSample,
+    calculate_global_poses,
+    SQT,
+    draw_skeleton,
+    BlendTreeNode,
+    ClipNode,
+    LerpNode,
+};
 pub use skinned_renderer::SkinnedRenderer;

@@ -2,10 +2,11 @@
 #![feature(custom_attribute)]
 #![feature(old_path)]
 #![feature(plugin)]
+#![feature(convert)]
+#![feature(std_misc)]
 #![plugin(gfx_macros)]
 
 extern crate collada;
-extern crate geometry;
 extern crate gfx;
 extern crate gfx_debug_draw;
 extern crate gfx_device_gl;

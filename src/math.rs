@@ -2,45 +2,53 @@ use vecmath::Matrix4;
 use quaternion::Quaternion;
 
 ///
-/// Works, but not ideal. Seeing some popping in animation due to errors...
-/// See http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
+/// Adapted from Id Software's DOOM III source
+/// https://github.com/id-Software/DOOM-3-BFG/blob/9c37079c16015fc58de29d3de366e0d93dc11f8a/neo/idlib/math/Matrix.cpp#L168
 ///
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
+
+    let mut q = [0.0, 0.0, 0.0, 0.0];
+
+    let next = [1, 2, 0];
+
     let trace = m[0][0] + m[1][1] + m[2][2];
-    if (trace + 1.0) > 0.0 {
-        let s = (trace + 1.0).sqrt() * 2.0;
-        let w = s * 0.25;
-        let x = (m[1][2] - m[2][1]) / s;
-        let y = (m[2][0] - m[0][2]) / s;
-        let z = (m[0][1] - m[1][0]) / s;
-        (w, [x, y, z])
-    } else if ((m[0][0] > m [1][1]) && (m[0][0] > m[2][2])) {
 
-        let s = (1.0 + m[0][0] - m[1][1] - m[2][2]).sqrt() * 2.0;
-        let w = (m[1][2] - m[2][1]) / s;
-        let x = s * 0.25;
-        let y = (m[1][0] - m[0][1]) / s;
-        let z = (m[2][0] - m[0][2]) / s;
-        (w, [x, y, z])
+    if trace > 0.0 {
 
-    } else if (m[1][1] > m [2][2]) {
+        let t = trace + 1.0;
+        let s = t.rsqrt() * 0.5;
 
-        let s = (1.0 + m[1][1] - m[0][0] - m[2][2]).sqrt() * 2.0;
-        let w = (m[2][0] - m[0][2]) / s;
-        let x = (m[1][0] - m[0][1]) / s;
-        let y = s * 0.25;
-        let z = (m[2][1] - m[1][2]) / s;
-        (w, [x, y, z])
+        q[3] = s * t;
+        q[0] = (m[1][2] - m[2][1]) * s;
+        q[1] = (m[2][0] - m[0][2]) * s;
+        q[2] = (m[0][1] - m[1][0]) * s;
 
     } else {
 
-        let s = (1.0 + m[2][2] - m[0][0] - m[1][1]).sqrt() * 2.0;
-        let w = (m[0][1] - m[1][0]) / s;
-        let x = (m[2][0] - m[0][2]) / s;
-        let y = (m[2][1] - m[1][2]) / s;
-        let z = s * 0.25;
-        (w, [x, y, z])
+        let mut i = 0;
+
+        if m[1][1] > m[0][0] {
+            i = 1;
+        }
+
+        if m[2][2] > m[i][i] {
+            i = 2;
+        }
+
+        let j = next[i];
+        let k = next[j];
+
+        let t = (m[i][i] - (m[j][j] + m[k][k])) + 1.0;
+        let s = t.rsqrt() * 0.5;
+
+        q[i] = s * t;
+        q[3] = (m[j][k] - m[k][j]) * s;
+        q[j] = (m[i][j] + m[j][i]) * s;
+        q[k] = (m[i][k] + m[k][i]) * s;
+
     }
+
+    (q[3], [q[0], q[1], q[2]])
 }
 
 ///

@@ -1,8 +1,5 @@
 use collada::document::ColladaDocument;
 use collada::{self, BindData, VertexWeight, Skeleton};
-use geometry::Object as GeometryObject;
-use geometry::Model as GeometryModel;
-use geometry::{ Position, TextureCoords, Normal, Geometry };
 use gfx::batch::RefBatch;
 use gfx::shade::TextureParam;
 use gfx::state::Comparison;
@@ -10,7 +7,7 @@ use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
 use gfx::traits::*;
 use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
 use gfx_device_gl::{ GlDevice, GlResources };
-use gfx_texture::{ Texture };
+use gfx_texture::{ self, Texture };
 use quack::{ SetAt };
 use std::default::Default;
 use std::path::Path;
@@ -121,8 +118,6 @@ impl SkinnedRenderer {
 
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
             let mut index_data: Vec<u32> = Vec::new();
-            let mut geometry_data: Geometry = Geometry::new();
-            let mut objects = GeometryObject::new();
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
@@ -136,7 +131,12 @@ impl SkinnedRenderer {
 
             let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
 
-            let texture = Texture::from_path(&mut graphics.device, &Path::new(&texture_paths[i])).unwrap();
+            let texture = Texture::from_path(
+                &mut graphics.device,
+                &Path::new(&texture_paths[i]),
+                &gfx_texture::Settings::new()
+            ).unwrap();
+
             let sampler = graphics.device.create_sampler(
                 SamplerInfo::new(
                     FilterMethod::Trilinear,
@@ -195,6 +195,7 @@ struct SkinnedShaderParams<R: Resources> {
 
 #[vertex_format]
 #[derive(Copy)]
+#[derive(Clone)]
 #[derive(Debug)]
 struct SkinnedVertex {
     pos: [f32; 3],
@@ -213,24 +214,6 @@ impl Default for SkinnedVertex {
             joint_indices: [0; 4],
             joint_weights: [0.0; 4],
         }
-    }
-}
-
-impl SetAt for (Position, SkinnedVertex) {
-    fn set_at(Position(pos): Position, vertex: &mut SkinnedVertex) {
-        vertex.pos = pos;
-    }
-}
-
-impl SetAt for (Normal, SkinnedVertex) {
-    fn set_at(Normal(normal): Normal, vertex: &mut SkinnedVertex) {
-        vertex.normal = normal;
-    }
-}
-
-impl SetAt for (TextureCoords, SkinnedVertex) {
-    fn set_at(TextureCoords(coords): TextureCoords, vertex: &mut SkinnedVertex) {
-        vertex.uv = coords;
     }
 }
 

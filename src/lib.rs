@@ -17,9 +17,6 @@ extern crate quaternion;
 extern crate vecmath;
 extern crate interpolation;
 
-// TODO - 'SkinnedRenderer' probably belongs in its own crate,
-// then we wouldn't need the following dependencies here
-
 pub mod animation;
 pub mod skinned_renderer;
 mod math;
@@ -31,7 +28,6 @@ pub use animation::{
     SQT,
     draw_skeleton,
     BlendTreeNode,
-    ClipNode,
-    LerpNode,
 };
+
 pub use skinned_renderer::SkinnedRenderer;

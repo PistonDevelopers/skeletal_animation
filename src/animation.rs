@@ -12,48 +12,48 @@ use gfx_debug_draw::DebugRenderer;
 use gfx_device_gl::Device as GlDevice;
 use gfx_device_gl::Factory as GlFactory;
 
-use math::{quaternion_to_matrix, matrix_to_quaternion, inv_sqrt};
+use math::*;
 
 use interpolation::{Spatial, lerp};
 
-pub trait BlendTreeNode {
-    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]);
+use std::rc::Rc;
+use std::cell::RefCell;
+
+pub type BlendParamIndex = usize;
+
+pub enum BlendTreeNode {
+    LerpNode(Rc<RefCell<BlendTreeNode>>, Rc<RefCell<BlendTreeNode>>, BlendParamIndex),
+    ClipNode(Rc<RefCell<AnimationClip>>),
 }
 
-pub struct LerpNode<'a> {
-    pub blend_parameter: f32,
-    pub inputs: [&'a BlendTreeNode; 2],
-}
+impl BlendTreeNode {
 
-impl<'a> BlendTreeNode for LerpNode<'a> {
-    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]) {
+    pub fn get_output_pose(&self, elapsed_time: f32, params: &[f32], output_poses: &mut [SQT]) {
+        match self {
+            &BlendTreeNode::LerpNode(ref input_1, ref input_2, blend_param_index) => {
 
-        let mut input_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+                let mut input_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
 
-        let sample_count = output_poses.len();
+                let sample_count = output_poses.len();
 
-        self.inputs[0].get_output_pose(elapsed_time, &mut input_poses[0 .. sample_count]);
-        self.inputs[1].get_output_pose(elapsed_time, output_poses);
+                input_1.borrow().get_output_pose(elapsed_time, params, &mut input_poses[0 .. sample_count]);
+                input_2.borrow().get_output_pose(elapsed_time, params, output_poses);
 
-        for i in (0 .. output_poses.len()) {
-            let pose_1 = input_poses[i];
-            let pose_2 = &mut output_poses[i];
-            pose_2.scale = lerp(&pose_1.scale, &pose_2.scale, &self.blend_parameter);
-            pose_2.translation = lerp(&pose_1.translation, &pose_2.translation, &self.blend_parameter);
-            pose_2.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &self.blend_parameter);
+                let blend_parameter = params[blend_param_index];
+
+                for i in (0 .. output_poses.len()) {
+                    let pose_1 = input_poses[i];
+                    let pose_2 = &mut output_poses[i];
+                    pose_2.scale = lerp(&pose_1.scale, &pose_2.scale, &blend_parameter);
+                    pose_2.translation = lerp(&pose_1.translation, &pose_2.translation, &blend_parameter);
+                    pose_2.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
+                }
+
+            }
+            &BlendTreeNode::ClipNode(ref clip) => {
+                clip.borrow().get_interpolated_poses_at_time(elapsed_time, output_poses);
+            }
         }
-
-    }
-}
-
-pub struct ClipNode<'a> {
-    pub start_time: f32,
-    pub clip: &'a AnimationClip,
-}
-
-impl<'a> BlendTreeNode for ClipNode<'a> {
-    fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [SQT]) {
-        self.clip.get_interpolated_poses_at_time(elapsed_time, output_poses);
     }
 }
 
@@ -65,22 +65,6 @@ pub struct AnimationClip {
     /// Assumes constant sample rate for animation
     ///
     pub samples_per_second: f32,
-}
-
-fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {
-
-    let dot = q1.0 * q2.0 + q1.1[0] * q2.1[0] + q1.1[1] * q2.1[1] + q1.1[2] * q2.1[2];
-
-    let s = 1.0 - blend_factor;
-    let t: f32 = if dot > 0.0 { *blend_factor } else { -blend_factor };
-
-    let w = s * q1.0 + t * q2.0;
-    let x = s * q1.1[0] + t * q2.1[0];
-    let y = s * q1.1[1] + t * q2.1[1];
-    let z = s * q1.1[2] + t * q2.1[2];
-
-    let inv_sqrt_len = inv_sqrt(w * w + x * x + y * y + z * z);
-    (w * inv_sqrt_len, [x  * inv_sqrt_len, y  * inv_sqrt_len, z  * inv_sqrt_len])
 }
 
 
@@ -129,8 +113,7 @@ impl AnimationClip {
 
     }
 
-
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<ColladaAnim>) -> AnimationClip {
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<ColladaAnim>, transform: &Matrix4<f32>) -> AnimationClip {
         use std::f32::consts::PI;
 
         // Z-axis is 'up' in COLLADA, so need to rotate root pose about x-axis so y-axis is 'up'
@@ -141,6 +124,8 @@ impl AnimationClip {
                 [0.0, (-PI/2.0).sin(), (PI/2.0).cos(), 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ];
+
+        let transform = row_mat4_mul(rotate_on_x, *transform);
 
         // Build an index of joint names to anims
         let mut joint_animations = HashMap::new();
@@ -164,8 +149,8 @@ impl AnimationClip {
             // falling back to identity matrix
             let local_poses: Vec<Matrix4<f32>> = skeleton.joints.iter().map(|joint| {
                 match joint_animations.get(&joint.name[..]) {
-                    Some(a) if joint.is_root() => row_mat4_mul(rotate_on_x, a.sample_poses[sample_index]),
-                    Some(a) => a.sample_poses[sample_index], // convert col major to row major
+                    Some(a) if joint.is_root() => row_mat4_mul(transform, a.sample_poses[sample_index]),
+                    Some(a) => a.sample_poses[sample_index],
                     None => mat4_id(),
                 }
             }).collect();

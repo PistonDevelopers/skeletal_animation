@@ -6,23 +6,23 @@ use gfx::state::Comparison;
 use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
 use gfx::traits::*;
 use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
-use gfx_device_gl::{ GlDevice, GlResources };
+use gfx_device_gl::Device as GlDevice;
+use gfx_device_gl::Resources as GlResources;
+use gfx_device_gl::Factory as GlFactory;
 use gfx_texture::{ self, Texture };
-use quack::{ SetAt };
 use std::default::Default;
 use std::path::Path;
 use vecmath::*;
 
-use animation::AnimationClip;
-
-static MAX_JOINTS: usize = 64;
+const MAX_JOINTS: usize = 64;
 
 pub struct SkinnedRenderBatch {
     skinning_transforms_buffer: BufferHandle<GlResources, [[f32; 4]; 4]>,
     batch: RefBatch<SkinnedShaderParams<GlResources>>,
 }
+
 pub struct SkinnedRenderer {
-    animation_clip: AnimationClip<GlDevice>,
+    skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch>,
 }
 
@@ -90,16 +90,15 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
     }
 }
 
-
 impl SkinnedRenderer {
 
     pub fn from_collada(
-        graphics: &mut Graphics<GlDevice>,
+        graphics: &mut Graphics<GlDevice, GlFactory>,
         collada_document: ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
     ) -> Result<SkinnedRenderer, ProgramError> {
 
-        let program = match graphics.device.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
+        let program = match graphics.factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
             Ok(program_handle) => program_handle,
             Err(e) => return Err(e),
         };
@@ -110,8 +109,6 @@ impl SkinnedRenderer {
         let mut animations = collada_document.get_animations();
         let mut skeleton = &skeleton_set[0];
 
-        let animation_clip = AnimationClip::from_collada(skeleton, &animations);
-
         let mut render_batches = Vec::new();
 
         for (i, object) in obj_set.objects.iter().enumerate().take(6) {
@@ -119,25 +116,26 @@ impl SkinnedRenderer {
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
             let mut index_data: Vec<u32> = Vec::new();
 
+
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let mesh = graphics.device.create_mesh(vertex_data.as_slice());
+            let mesh = graphics.factory.create_mesh(vertex_data.as_slice());
 
             let state = DrawState::new().depth(Comparison::LessEqual, true);
 
-            let slice = graphics.device
+            let slice = graphics.factory
                 .create_buffer_index::<u32>(index_data.as_slice())
                 .to_slice(PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = graphics.device.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
+            let skinning_transforms_buffer = graphics.factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
 
             let texture = Texture::from_path(
-                &mut graphics.device,
+                &mut graphics.factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
 
-            let sampler = graphics.device.create_sampler(
+            let sampler = graphics.factory.create_sampler(
                 SamplerInfo::new(
                     FilterMethod::Trilinear,
                     WrapMode::Clamp
@@ -161,27 +159,44 @@ impl SkinnedRenderer {
 
 
         Ok(SkinnedRenderer {
-            animation_clip: animation_clip,
             render_batches: render_batches,
+            skeleton: skeleton.clone(),
         })
     }
 
     pub fn render(
         &mut self,
-        graphics: &mut Graphics<GlDevice>,
+        graphics: &mut Graphics<GlDevice, GlFactory>,
         frame: &Frame<GlResources>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        elapsed_time: f32,
+        joint_poses: &[Matrix4<f32>]
     ) {
+
+        let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
+
         for material in self.render_batches.iter_mut() {
             material.batch.params.u_model_view = view;
             material.batch.params.u_model_view_proj = projection;
 
-            let sample = self.animation_clip.sample_at_time(elapsed_time);
-            graphics.device.update_buffer(&material.skinning_transforms_buffer, &sample.skinning_transforms[..], 0);
+            // FIXME -- should all be able to share the same buffer
+            graphics.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+
             graphics.draw(&material.batch, frame).unwrap();
         }
+    }
+
+    ///
+    /// TODO - don't allocate a new vector
+    ///
+    pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
+
+        use std::f32::consts::PI;
+        use std::num::{Float};
+
+        self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
+            row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
+        }).collect()
     }
 }
 

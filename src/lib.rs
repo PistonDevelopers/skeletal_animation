@@ -16,6 +16,7 @@ extern crate quack;
 extern crate quaternion;
 extern crate vecmath;
 extern crate interpolation;
+extern crate rustc_serialize;
 
 pub mod animation;
 pub mod skinned_renderer;
@@ -28,6 +29,8 @@ pub use animation::{
     SQT,
     draw_skeleton,
     BlendTreeNode,
+    BlendTreeNodeDef,
+    load_animations,
 };
 
 pub use skinned_renderer::SkinnedRenderer;

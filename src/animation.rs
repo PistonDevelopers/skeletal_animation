@@ -1,4 +1,5 @@
 use collada::Animation as ColladaAnim;
+use collada::document::ColladaDocument;
 use collada::Skeleton;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -19,14 +20,104 @@ use interpolation::{Spatial, lerp};
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use rustc_serialize::{self, Decodable, Decoder, json};
+
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
+
 pub type BlendParamIndex = usize;
 
 pub enum BlendTreeNode {
-    LerpNode(Rc<RefCell<BlendTreeNode>>, Rc<RefCell<BlendTreeNode>>, BlendParamIndex),
-    ClipNode(Rc<RefCell<AnimationClip>>),
+    LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, BlendParamIndex),
+    ClipNode(Rc<RefCell<AnimationClip>>), // Maybe just use a GUID, but that sucks at runtime..
+}
+
+
+pub type ClipId = String;
+
+#[derive(Clone)]
+pub enum BlendTreeNodeDef {
+    LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, BlendParamIndex),
+    ClipNode(ClipId),
+}
+
+impl BlendTreeNodeDef {
+    pub fn from_path(path: &str) -> Result<BlendTreeNodeDef, &'static str> {
+        let file_result = File::open(path);
+
+        let mut file = match file_result {
+            Ok(file) => file,
+            Err(_) => return Err("Failed to open definition file at path.")
+        };
+
+        let mut json_string = String::new();
+        match file.read_to_string(&mut json_string) {
+            Ok(_) => {},
+            Err(_) => return Err("Failed to read definition file.")
+        };
+
+        Ok(json::decode(&json_string[..]).unwrap())
+    }
+}
+
+impl Decodable for BlendTreeNodeDef {
+
+    fn decode<D: Decoder>(decoder: &mut D) -> Result<BlendTreeNodeDef, D::Error> {
+        decoder.read_struct("root", 0, |decoder| {
+
+            let node_type = try!(decoder.read_struct_field("type", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+
+            match &node_type[..] {
+                "LerpNode" => {
+
+                    let (input_1, input_2) = try!(decoder.read_struct_field("inputs", 0, |decoder| {
+                        decoder.read_seq(|decoder, len| {
+                            Ok((
+                                try!(decoder.read_seq_elt(0, Decodable::decode)),
+                                try!(decoder.read_seq_elt(1, Decodable::decode))
+                            ))
+                        })
+                    }));
+
+                    // TODO read a string, and either convert to usize given some map, or leave it
+                    // for later...
+
+                    let blend_param_index = try!(decoder.read_struct_field("param", 0, |decoder| { Ok(try!(decoder.read_usize())) }));
+
+                    Ok(BlendTreeNodeDef::LerpNode(Box::new(input_1), Box::new(input_2), blend_param_index))
+
+                },
+                "ClipNode" => {
+                    let clip_source = try!(decoder.read_struct_field("clip_source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    Ok(BlendTreeNodeDef::ClipNode(clip_source))
+                }
+                _ => panic!("Unexpected blend node type")
+            }
+        })
+    }
 }
 
 impl BlendTreeNode {
+
+    pub fn from_def(def: BlendTreeNodeDef, animations: &HashMap<String, Rc<RefCell<AnimationClip>>>) -> BlendTreeNode {
+
+        match def {
+
+            BlendTreeNodeDef::LerpNode(input_1, input_2, blend_param_index) => {
+                BlendTreeNode::LerpNode(
+                    Box::new(BlendTreeNode::from_def(*input_1, animations)),
+                    Box::new(BlendTreeNode::from_def(*input_2, animations)),
+                    blend_param_index,
+                )
+            }
+
+            BlendTreeNodeDef::ClipNode(clip_id) => {
+                let clip = &animations[&clip_id[..]];
+                BlendTreeNode::ClipNode(clip.clone())
+            }
+        }
+    }
 
     pub fn get_output_pose(&self, elapsed_time: f32, params: &[f32], output_poses: &mut [SQT]) {
         match self {
@@ -36,8 +127,8 @@ impl BlendTreeNode {
 
                 let sample_count = output_poses.len();
 
-                input_1.borrow().get_output_pose(elapsed_time, params, &mut input_poses[0 .. sample_count]);
-                input_2.borrow().get_output_pose(elapsed_time, params, output_poses);
+                input_1.get_output_pose(elapsed_time, params, &mut input_poses[0 .. sample_count]);
+                input_2.get_output_pose(elapsed_time, params, output_poses);
 
                 let blend_parameter = params[blend_param_index];
 
@@ -67,6 +158,76 @@ pub struct AnimationClip {
     pub samples_per_second: f32,
 }
 
+/// rotation matrix for `a` radians about z
+pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
+    [
+        [a.cos(), -a.sin(), 0.0, 0.0],
+        [a.sin(), a.cos(), 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+pub fn load_animations(path: &str) ->  Result<HashMap<String, Rc<RefCell<AnimationClip>>>, &'static str> {
+
+    let file_result = File::open(path);
+
+    let mut file = match file_result {
+        Ok(file) => file,
+        Err(_) => return Err("Failed to open definition file at path.")
+    };
+
+    let mut json_string = String::new();
+    match file.read_to_string(&mut json_string) {
+        Ok(_) => {},
+        Err(_) => return Err("Failed to read definition file.")
+    };
+
+    let json = match json::Json::from_str(&json_string[..]) {
+        Ok(x) => x,
+        Err(e) => return Err("invalid json!?")
+    };
+
+    let mut clips = HashMap::new();
+
+    let mut decoder = json::Decoder::new(json);
+
+    decoder.read_seq(|decoder, len| {
+        for i in (0 .. len) {
+            decoder.read_struct("root", 0, |decoder| {
+
+                let name = try!(decoder.read_struct_field("name", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                let source = try!(decoder.read_struct_field("source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                let looping = try!(decoder.read_struct_field("looping", 0, |decoder| { Ok(try!(decoder.read_bool())) }));
+                let duration = try!(decoder.read_struct_field("duration", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
+                let rotate_z_angle = try!(decoder.read_struct_field("rotate-z", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
+
+                // Wacky. Shouldn't it be an error if the struct field isn't present?
+                let adjust = if !rotate_z_angle.is_nan() {
+                    mat4_rotate_z(rotate_z_angle.to_radians())
+                } else {
+                    mat4_id()
+                };
+
+                let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
+                let animations = collada_document.get_animations();
+                let mut skeleton_set = collada_document.get_skeletons().unwrap();
+                let skeleton = &skeleton_set[0];
+
+                let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
+                clip.set_duration(duration);
+
+                clips.insert(name, Rc::new(RefCell::new(clip)));
+
+                Ok(0)
+            });
+        }
+
+        Ok(0)
+    });
+
+    Ok(clips)
+}
 
 impl AnimationClip {
 

@@ -1,11 +1,21 @@
 use vecmath::Matrix4;
 use quaternion::Quaternion;
+use std::mem;
 
-///
-/// Adapted from Id Software's DOOM III source
-/// https://github.com/id-Software/DOOM-3-BFG/blob/9c37079c16015fc58de29d3de366e0d93dc11f8a/neo/idlib/math/Matrix.cpp#L168
-/// FIXME - still getting wierd popping... :(
-///
+pub fn inv_sqrt(x: f32) -> f32 {
+
+    let x2: f32 = x * 0.5;
+    let mut y: f32 = x;
+
+    let mut i: i32 = unsafe { mem::transmute(y) };
+    i = 0x5f3759df - (i >> 1);
+    y = unsafe { mem::transmute(i) };
+
+    y = y * (1.5 - (x2 * y * y));
+    y
+
+}
+
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
 
     let mut q = [0.0, 0.0, 0.0, 0.0];
@@ -17,7 +27,7 @@ pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
     if trace > 0.0 {
 
         let t = trace + 1.0;
-        let s = t.rsqrt() * 0.5;
+        let s = inv_sqrt(t) * 0.5;
 
         q[3] = s * t;
         q[0] = (m[1][2] - m[2][1]) * s;
@@ -40,7 +50,7 @@ pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
         let k = next[j];
 
         let t = (m[i][i] - (m[j][j] + m[k][k])) + 1.0;
-        let s = t.rsqrt() * 0.5;
+        let s = inv_sqrt(t) * 0.5;
 
         q[i] = s * t;
         q[3] = (m[j][k] - m[k][j]) * s;

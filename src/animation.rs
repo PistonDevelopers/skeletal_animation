@@ -3,8 +3,7 @@ use collada::Skeleton;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::num::Float;
-use vecmath::{Vector3, Matrix4, mat4_id, row_mat4_transform, row_mat4_mul, mat4_transposed};
-use quaternion::id as quaternion_id;
+use vecmath::{Vector3, Matrix4, mat4_id, row_mat4_transform, row_mat4_mul, mat4_transposed, mat4_sub};
 use quaternion::Quaternion;
 
 use gfx::{Device};
@@ -13,7 +12,7 @@ use gfx_debug_draw::DebugRenderer;
 use gfx_device_gl::Device as GlDevice;
 use gfx_device_gl::Factory as GlFactory;
 
-use math::{quaternion_to_matrix, matrix_to_quaternion};
+use math::{quaternion_to_matrix, matrix_to_quaternion, inv_sqrt};
 
 use interpolation::{Spatial, lerp};
 
@@ -70,19 +69,20 @@ pub struct AnimationClip {
 
 fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {
 
-    // interpolate
+    let dot = q1.0 * q2.0 + q1.1[0] * q2.1[0] + q1.1[1] * q2.1[1] + q1.1[2] * q2.1[2];
 
-    let blend_factor_recip = 1.0 - blend_factor;
-    let w = blend_factor_recip * q1.0 + blend_factor * q2.0;
-    let x = blend_factor_recip * q1.1[0] + blend_factor * q2.1[0];
-    let y = blend_factor_recip * q1.1[1] + blend_factor * q2.1[1];
-    let z = blend_factor_recip * q1.1[2] + blend_factor * q2.1[2];
+    let s = 1.0 - blend_factor;
+    let t: f32 = if dot > 0.0 { *blend_factor } else { -blend_factor };
 
-    // renormalize
+    let w = s * q1.0 + t * q2.0;
+    let x = s * q1.1[0] + t * q2.1[0];
+    let y = s * q1.1[1] + t * q2.1[1];
+    let z = s * q1.1[2] + t * q2.1[2];
 
-    let len = (w * w + x * x + y * y + z * z).sqrt();
-    (w/len, [x / len, y / len, z /len])
+    let inv_sqrt_len = inv_sqrt(w * w + x * x + y * y + z * z);
+    (w * inv_sqrt_len, [x  * inv_sqrt_len, y  * inv_sqrt_len, z  * inv_sqrt_len])
 }
+
 
 impl AnimationClip {
 

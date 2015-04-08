@@ -27,6 +27,40 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+
+///
+/// SQT - (Scale, Quaternion, Translation)
+/// Transformation represented by separate scaling, translation, and rotation factors
+/// Necessary for rotational interpolation
+///
+#[derive(Debug, Copy, Clone)]
+pub struct SQT
+{
+    ///
+    /// 3D Translation
+    ///
+    pub translation: Vector3<f32>,
+    ///
+    /// Uniform scale factor.
+    ///
+    pub scale: f32,
+    ///
+    /// Rotation
+    ///
+    pub rotation: Quaternion<f32>
+}
+
+#[derive(Debug)]
+pub struct AnimationSample
+{
+    ///
+    /// Local pose transforms for each joint in the targeted skeleton
+    /// (relative to parent joint)
+    ///
+    pub local_poses: Vec<SQT>,
+}
+
+
 #[derive(Debug)]
 pub struct AnimationClip {
     pub samples: Vec<AnimationSample>,
@@ -38,6 +72,7 @@ pub struct AnimationClip {
 }
 
 /// rotation matrix for `a` radians about z
+/// TODO move
 pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
     [
         [a.cos(), -a.sin(), 0.0, 0.0],
@@ -45,67 +80,6 @@ pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
         [0.0, 0.0, 1.0, 0.0],
         [0.0, 0.0, 0.0, 1.0],
     ]
-}
-
-pub fn load_animations(path: &str) ->  Result<HashMap<String, Rc<RefCell<AnimationClip>>>, &'static str> {
-
-    let file_result = File::open(path);
-
-    let mut file = match file_result {
-        Ok(file) => file,
-        Err(_) => return Err("Failed to open definition file at path.")
-    };
-
-    let mut json_string = String::new();
-    match file.read_to_string(&mut json_string) {
-        Ok(_) => {},
-        Err(_) => return Err("Failed to read definition file.")
-    };
-
-    let json = match json::Json::from_str(&json_string[..]) {
-        Ok(x) => x,
-        Err(e) => return Err("invalid json!?")
-    };
-
-    let mut clips = HashMap::new();
-
-    let mut decoder = json::Decoder::new(json);
-
-    decoder.read_seq(|decoder, len| {
-        for i in (0 .. len) {
-            decoder.read_struct("root", 0, |decoder| {
-
-                let name = try!(decoder.read_struct_field("name", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                let source = try!(decoder.read_struct_field("source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                let looping = try!(decoder.read_struct_field("looping", 0, |decoder| { Ok(try!(decoder.read_bool())) }));
-                let duration = try!(decoder.read_struct_field("duration", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
-                let rotate_z_angle = try!(decoder.read_struct_field("rotate-z", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
-
-                // Wacky. Shouldn't it be an error if the struct field isn't present?
-                let adjust = if !rotate_z_angle.is_nan() {
-                    mat4_rotate_z(rotate_z_angle.to_radians())
-                } else {
-                    mat4_id()
-                };
-
-                let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
-                let animations = collada_document.get_animations();
-                let mut skeleton_set = collada_document.get_skeletons().unwrap();
-                let skeleton = &skeleton_set[0];
-
-                let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
-                clip.set_duration(duration);
-
-                clips.insert(name, Rc::new(RefCell::new(clip)));
-
-                Ok(0)
-            });
-        }
-
-        Ok(0)
-    });
-
-    Ok(clips)
 }
 
 impl AnimationClip {
@@ -220,40 +194,9 @@ impl AnimationClip {
     }
 }
 
-///
-/// FIXME - don't allocate a new Vec!
-///
-pub fn calculate_global_poses(
-    skeleton: &Skeleton,
-    local_poses: &[SQT],
-) -> Vec<Matrix4<f32>> {
-
-    let mut global_poses: Vec<Matrix4<f32>> = Vec::new();
-
-    for (joint_index, joint) in skeleton.joints.iter().enumerate() {
-
-        let parent_pose = if !joint.is_root() {
-            global_poses[joint.parent_index as usize]
-        } else {
-            mat4_id()
-        };
-
-        let local_pose_sqt = &local_poses[joint_index];
-
-        let mut local_pose = quaternion_to_matrix(local_pose_sqt.rotation);
-
-        local_pose[0][3] = local_pose_sqt.translation[0];
-        local_pose[1][3] = local_pose_sqt.translation[1];
-        local_pose[2][3] = local_pose_sqt.translation[2];
-
-        global_poses.push(row_mat4_mul(parent_pose, local_pose));
-    }
-
-    global_poses
-}
-
-pub fn draw_skeleton(skeleton: &Skeleton, global_poses: &Vec<Matrix4<f32>>, debug_renderer: &mut DebugRenderer<GlResources>, draw_labels: bool) {
-    for (joint_index, joint) in skeleton.joints.iter().enumerate() {
+// TODO - have a crate-local skeleton struct (not from collada!), move this to it's impl
+pub fn draw_skeleton(skeleton: Rc<RefCell<Skeleton>>, global_poses: &[Matrix4<f32>], debug_renderer: &mut DebugRenderer<GlResources>, draw_labels: bool) {
+    for (joint_index, joint) in skeleton.borrow().joints.iter().enumerate() {
 
         let joint_position = row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
 
@@ -273,7 +216,7 @@ pub fn draw_skeleton(skeleton: &Skeleton, global_poses: &Vec<Matrix4<f32>>, debu
                 [0.2, 0.2, 0.2, 1.0]
             );
 
-            if !skeleton.joints.iter().any(|j| j.parent_index as usize == joint_index) {
+            if !skeleton.borrow().joints.iter().any(|j| j.parent_index as usize == joint_index) {
 
                 // Draw extension along joint's y-axis...
                 debug_renderer.draw_line(
@@ -329,34 +272,63 @@ pub fn draw_skeleton(skeleton: &Skeleton, global_poses: &Vec<Matrix4<f32>>, debu
     }
 }
 
-///
-/// SQT - (Scale, Quaternion, Translation)
-/// Transformation represented by separate scaling, translation, and rotation factors
-/// Necessary for rotational interpolation
-///
-#[derive(Debug, Copy, Clone)]
-pub struct SQT
-{
-    ///
-    /// 3D Translation
-    ///
-    pub translation: Vector3<f32>,
-    ///
-    /// Uniform scale factor.
-    ///
-    pub scale: f32,
-    ///
-    /// Rotation
-    ///
-    pub rotation: Quaternion<f32>
-}
+pub fn load_animations(path: &str) ->  Result<HashMap<String, Rc<RefCell<AnimationClip>>>, &'static str> {
 
-#[derive(Debug)]
-pub struct AnimationSample
-{
-    ///
-    /// Local pose transforms for each joint in the targeted skeleton
-    /// (relative to parent joint)
-    ///
-    pub local_poses: Vec<SQT>,
+    let file_result = File::open(path);
+
+    let mut file = match file_result {
+        Ok(file) => file,
+        Err(_) => return Err("Failed to open definition file at path.")
+    };
+
+    let mut json_string = String::new();
+    match file.read_to_string(&mut json_string) {
+        Ok(_) => {},
+        Err(_) => return Err("Failed to read definition file.")
+    };
+
+    let json = match json::Json::from_str(&json_string[..]) {
+        Ok(x) => x,
+        Err(e) => return Err("invalid json!?")
+    };
+
+    let mut clips = HashMap::new();
+
+    let mut decoder = json::Decoder::new(json);
+
+    decoder.read_seq(|decoder, len| {
+        for i in (0 .. len) {
+            decoder.read_struct("root", 0, |decoder| {
+
+                let name = try!(decoder.read_struct_field("name", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                let source = try!(decoder.read_struct_field("source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                let looping = try!(decoder.read_struct_field("looping", 0, |decoder| { Ok(try!(decoder.read_bool())) }));
+                let duration = try!(decoder.read_struct_field("duration", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
+                let rotate_z_angle = try!(decoder.read_struct_field("rotate-z", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
+
+                // Wacky. Shouldn't it be an error if the struct field isn't present?
+                let adjust = if !rotate_z_angle.is_nan() {
+                    mat4_rotate_z(rotate_z_angle.to_radians())
+                } else {
+                    mat4_id()
+                };
+
+                let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
+                let animations = collada_document.get_animations();
+                let mut skeleton_set = collada_document.get_skeletons().unwrap();
+                let skeleton = &skeleton_set[0];
+
+                let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
+                clip.set_duration(duration);
+
+                clips.insert(name, Rc::new(RefCell::new(clip)));
+
+                Ok(0)
+            });
+        }
+
+        Ok(0)
+    });
+
+    Ok(clips)
 }

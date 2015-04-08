@@ -21,12 +21,12 @@ extern crate rustc_serialize;
 pub mod animation;
 pub mod skinned_renderer;
 pub mod blend_tree;
+pub mod controller;
 mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    calculate_global_poses,
     SQT,
     draw_skeleton,
     load_animations,
@@ -36,5 +36,7 @@ pub use blend_tree::{
     BlendTreeNode,
     BlendTreeNodeDef,
 };
+
+pub use controller::AnimationController;
 
 pub use skinned_renderer::SkinnedRenderer;

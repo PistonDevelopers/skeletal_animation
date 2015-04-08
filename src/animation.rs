@@ -60,7 +60,6 @@ pub struct AnimationSample
     pub local_poses: Vec<SQT>,
 }
 
-
 #[derive(Debug)]
 pub struct AnimationClip {
     pub samples: Vec<AnimationSample>,
@@ -69,17 +68,6 @@ pub struct AnimationClip {
     /// Assumes constant sample rate for animation
     ///
     pub samples_per_second: f32,
-}
-
-/// rotation matrix for `a` radians about z
-/// TODO move
-pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
-    [
-        [a.cos(), -a.sin(), 0.0, 0.0],
-        [a.sin(), a.cos(), 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
 }
 
 impl AnimationClip {
@@ -270,65 +258,4 @@ pub fn draw_skeleton(skeleton: Rc<RefCell<Skeleton>>, global_poses: &[Matrix4<f3
             [0.2, 0.2, 1.0, 1.0]
         );
     }
-}
-
-pub fn load_animations(path: &str) ->  Result<HashMap<String, Rc<RefCell<AnimationClip>>>, &'static str> {
-
-    let file_result = File::open(path);
-
-    let mut file = match file_result {
-        Ok(file) => file,
-        Err(_) => return Err("Failed to open definition file at path.")
-    };
-
-    let mut json_string = String::new();
-    match file.read_to_string(&mut json_string) {
-        Ok(_) => {},
-        Err(_) => return Err("Failed to read definition file.")
-    };
-
-    let json = match json::Json::from_str(&json_string[..]) {
-        Ok(x) => x,
-        Err(e) => return Err("invalid json!?")
-    };
-
-    let mut clips = HashMap::new();
-
-    let mut decoder = json::Decoder::new(json);
-
-    decoder.read_seq(|decoder, len| {
-        for i in (0 .. len) {
-            decoder.read_struct("root", 0, |decoder| {
-
-                let name = try!(decoder.read_struct_field("name", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                let source = try!(decoder.read_struct_field("source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                let looping = try!(decoder.read_struct_field("looping", 0, |decoder| { Ok(try!(decoder.read_bool())) }));
-                let duration = try!(decoder.read_struct_field("duration", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
-                let rotate_z_angle = try!(decoder.read_struct_field("rotate-z", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
-
-                // Wacky. Shouldn't it be an error if the struct field isn't present?
-                let adjust = if !rotate_z_angle.is_nan() {
-                    mat4_rotate_z(rotate_z_angle.to_radians())
-                } else {
-                    mat4_id()
-                };
-
-                let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
-                let animations = collada_document.get_animations();
-                let mut skeleton_set = collada_document.get_skeletons().unwrap();
-                let skeleton = &skeleton_set[0];
-
-                let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
-                clip.set_duration(duration);
-
-                clips.insert(name, Rc::new(RefCell::new(clip)));
-
-                Ok(0)
-            });
-        }
-
-        Ok(0)
-    });
-
-    Ok(clips)
 }

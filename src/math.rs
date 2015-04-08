@@ -32,6 +32,17 @@ pub fn inv_sqrt(x: f32) -> f32 {
 
 }
 
+/// rotation matrix for `a` radians about z
+pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
+    [
+        [a.cos(), -a.sin(), 0.0, 0.0],
+        [a.sin(), a.cos(), 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
+
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
 
     let mut q = [0.0, 0.0, 0.0, 0.0];

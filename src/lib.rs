@@ -22,6 +22,7 @@ pub mod animation;
 pub mod skinned_renderer;
 pub mod blend_tree;
 pub mod controller;
+pub mod manager;
 mod math;
 
 pub use animation::{
@@ -29,13 +30,14 @@ pub use animation::{
     AnimationSample,
     SQT,
     draw_skeleton,
-    load_animations,
 };
 
 pub use blend_tree::{
     BlendTreeNode,
     BlendTreeNodeDef,
 };
+
+pub use manager::AssetManager;
 
 pub use controller::AnimationController;
 

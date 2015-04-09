@@ -27,6 +27,25 @@ impl AssetManager {
         }
     }
 
+    pub fn load_def_from_path<T>(path: &str) -> Result<T, &'static str>
+        where T: Decodable
+    {
+        let file_result = File::open(path);
+
+        let mut file = match file_result {
+            Ok(file) => file,
+            Err(_) => return Err("Failed to open definition file at path.")
+        };
+
+        let mut json_string = String::new();
+        match file.read_to_string(&mut json_string) {
+            Ok(_) => {},
+            Err(_) => return Err("Failed to read definition file.")
+        };
+
+        Ok(json::decode(&json_string[..]).unwrap())
+    }
+
     // TODO load/manage blend tree defs
 
     pub fn load_animations(&mut self, path: &str) ->  Result<(), &'static str> {
@@ -58,7 +77,10 @@ impl AssetManager {
                     let skeleton = &skeleton_set[0];
 
                     let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
-                    clip.set_duration(duration);
+
+                    if !duration.is_nan() {
+                        clip.set_duration(duration);
+                    }
 
                     self.animation_clips.insert(name, Rc::new(RefCell::new(clip)));
 

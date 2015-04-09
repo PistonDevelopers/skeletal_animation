@@ -34,7 +34,15 @@ pub struct AnimationController {
     ///
     skeleton: Rc<RefCell<Skeleton>>,
 
-    // NOTE - consider keeping a local clock here rather than a global clock for all controller
+    ///
+    /// Tracks seconds since controller started running
+    ///
+    local_clock: f64,
+
+    ///
+    /// Playback speed multiplier.
+    ///
+    playback_speed: f64,
 }
 
 impl AnimationController {
@@ -52,7 +60,13 @@ impl AnimationController {
             blend_tree: blend_tree,
             parameters: parameters,
             skeleton: skeleton.clone(),
+            local_clock: 0.0,
+            playback_speed: 1.0,
         }
+    }
+
+    pub fn update(&mut self, delta_time: f64) {
+        self.local_clock += delta_time * self.playback_speed;
     }
 
     ///
@@ -60,6 +74,10 @@ impl AnimationController {
     ///
     pub fn set_param_value(&mut self, name: &str, value: f32) {
         self.parameters.insert(name.to_string(), value); // :(
+    }
+
+    pub fn set_playback_speed(&mut self, speed: f64) {
+        self.playback_speed = speed;
     }
 
     ///
@@ -77,9 +95,11 @@ impl AnimationController {
     }
 
     ///
-    /// Calculate GLOBAL skeletal joint poses for the given time
+    /// Calculate GLOBAL skeletal joint poses for the given time since last update
     ///
-    pub fn get_output_pose(&self, elapsed_time: f32, output_poses: &mut [Matrix4<f32>]) {
+    pub fn get_output_pose(&self, ext_dt: f64, output_poses: &mut [Matrix4<f32>]) {
+
+        let elapsed_time = self.local_clock + ext_dt * self.playback_speed;
 
         let mut local_poses = [ SQT {
             translation: [0.0, 0.0, 0.0],
@@ -87,7 +107,7 @@ impl AnimationController {
             rotation: (0.0, [0.0, 0.0, 0.0])
         }; MAX_JOINTS ];
 
-        self.blend_tree.get_output_pose(elapsed_time, &self.parameters, &mut local_poses[..]);
+        self.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut local_poses[..]);
         self.calculate_global_poses(&local_poses[..], output_poses);
 
     }

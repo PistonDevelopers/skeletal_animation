@@ -23,12 +23,16 @@ pub mod skinned_renderer;
 pub mod blend_tree;
 pub mod controller;
 pub mod manager;
+pub mod skeleton;
 mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
     SQT,
+};
+
+pub use skeleton::{
     draw_skeleton,
 };
 

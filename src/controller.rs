@@ -1,11 +1,12 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 use collada::Skeleton;
 use vecmath::{self, Matrix4};
 
-use animation::SQT;
-use blend_tree::BlendTreeNode;
+use animation::{SQT, AnimationClip};
+use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use math;
 
 const MAX_PARAMS: usize = 16;
@@ -24,7 +25,9 @@ pub struct AnimationController {
     ///
     /// Parameters that will be referenced by blend tree nodes and animation states
     ///
-    parameters: [f32; MAX_PARAMS],
+    ///
+    ///
+    parameters: HashMap<String, f32>,
 
     ///
     /// Shared reference to the skeleton this controller is using
@@ -36,27 +39,41 @@ pub struct AnimationController {
 
 impl AnimationController {
 
-    pub fn new(skeleton: Rc<RefCell<Skeleton>>, blend_tree: BlendTreeNode) -> AnimationController {
+    pub fn new(skeleton: Rc<RefCell<Skeleton>>, blend_tree_def: BlendTreeNodeDef, animations: &HashMap<ClipId, Rc<RefCell<AnimationClip>>>) -> AnimationController {
+
+        let mut parameters = HashMap::new();
+        for param in blend_tree_def.get_parameters().iter() {
+            parameters.insert(param.clone(), 0.0);
+        }
+
+        let blend_tree = BlendTreeNode::from_def(blend_tree_def, animations);
+
         AnimationController {
             blend_tree: blend_tree,
-            parameters: [0.0; MAX_PARAMS],
+            parameters: parameters,
             skeleton: skeleton.clone(),
         }
     }
 
     ///
     /// Set the value for the given parameter
-    /// TODO - use some kind of mapping from name to index?
     ///
-    pub fn set_param(&mut self, index: usize, value: f32) {
-        self.parameters[index] = value;
+    pub fn set_param_value(&mut self, name: &str, value: f32) {
+        self.parameters.insert(name.to_string(), value); // :(
     }
 
     ///
     /// Return the value for the given parameter
     ///
-    pub fn get_param(&self, index: usize) -> f32 {
-        self.parameters[index]
+    pub fn get_param_value(&self, name: &str) -> f32 {
+        self.parameters[name]
+    }
+
+    ///
+    /// Return a read-only reference to the parameter map
+    ///
+    pub fn get_parameters(&self) -> &HashMap<String, f32> {
+        &self.parameters
     }
 
     ///
@@ -70,7 +87,7 @@ impl AnimationController {
             rotation: (0.0, [0.0, 0.0, 0.0])
         }; MAX_JOINTS ];
 
-        self.blend_tree.get_output_pose(elapsed_time, &self.parameters[..], &mut local_poses[..]);
+        self.blend_tree.get_output_pose(elapsed_time, &self.parameters, &mut local_poses[..]);
         self.calculate_global_poses(&local_poses[..], output_poses);
 
     }

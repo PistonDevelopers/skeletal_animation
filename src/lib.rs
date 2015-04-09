@@ -16,22 +16,33 @@ extern crate quack;
 extern crate quaternion;
 extern crate vecmath;
 extern crate interpolation;
-
-// TODO - 'SkinnedRenderer' probably belongs in its own crate,
-// then we wouldn't need the following dependencies here
+extern crate rustc_serialize;
 
 pub mod animation;
 pub mod skinned_renderer;
+pub mod blend_tree;
+pub mod controller;
+pub mod manager;
+pub mod skeleton;
 mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    calculate_global_poses,
     SQT,
-    draw_skeleton,
-    BlendTreeNode,
-    ClipNode,
-    LerpNode,
 };
+
+pub use skeleton::{
+    draw_skeleton,
+};
+
+pub use blend_tree::{
+    BlendTreeNode,
+    BlendTreeNodeDef,
+};
+
+pub use manager::AssetManager;
+
+pub use controller::AnimationController;
+
 pub use skinned_renderer::SkinnedRenderer;

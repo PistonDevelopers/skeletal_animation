@@ -2,6 +2,22 @@ use vecmath::Matrix4;
 use quaternion::Quaternion;
 use std::mem;
 
+pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {
+
+    let dot = q1.0 * q2.0 + q1.1[0] * q2.1[0] + q1.1[1] * q2.1[1] + q1.1[2] * q2.1[2];
+
+    let s = 1.0 - blend_factor;
+    let t: f32 = if dot > 0.0 { *blend_factor } else { -blend_factor };
+
+    let w = s * q1.0 + t * q2.0;
+    let x = s * q1.1[0] + t * q2.1[0];
+    let y = s * q1.1[1] + t * q2.1[1];
+    let z = s * q1.1[2] + t * q2.1[2];
+
+    let inv_sqrt_len = inv_sqrt(w * w + x * x + y * y + z * z);
+    (w * inv_sqrt_len, [x  * inv_sqrt_len, y  * inv_sqrt_len, z  * inv_sqrt_len])
+}
+
 pub fn inv_sqrt(x: f32) -> f32 {
 
     let x2: f32 = x * 0.5;
@@ -15,6 +31,17 @@ pub fn inv_sqrt(x: f32) -> f32 {
     y
 
 }
+
+/// rotation matrix for `a` radians about z
+pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
+    [
+        [a.cos(), -a.sin(), 0.0, 0.0],
+        [a.sin(), a.cos(), 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+}
+
 
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
 

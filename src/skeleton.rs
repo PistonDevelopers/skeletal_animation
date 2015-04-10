@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use vecmath::{self, Matrix4};
 use collada::Skeleton;
+use gfx;
 use gfx_debug_draw::DebugRenderer;
-use gfx_device_gl::Resources as GlResources; // FIXME
+use vecmath::{self, Matrix4};
 
-pub fn draw_skeleton(skeleton: Rc<RefCell<Skeleton>>, global_poses: &[Matrix4<f32>], debug_renderer: &mut DebugRenderer<GlResources>, draw_labels: bool) {
+pub fn draw_skeleton<R: gfx::Resources>(skeleton: Rc<RefCell<Skeleton>>, global_poses: &[Matrix4<f32>], debug_renderer: &mut DebugRenderer<R>, draw_labels: bool) {
     for (joint_index, joint) in skeleton.borrow().joints.iter().enumerate() {
 
         let joint_position = vecmath::row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);

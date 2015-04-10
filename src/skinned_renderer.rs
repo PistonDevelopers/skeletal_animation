@@ -1,102 +1,35 @@
-use collada::document::ColladaDocument;
-use collada::{self, BindData, VertexWeight, Skeleton};
-use gfx::batch::RefBatch;
-use gfx::shade::TextureParam;
-use gfx::state::Comparison;
-use gfx::tex::{SamplerInfo, FilterMethod, WrapMode};
-use gfx::traits::*;
-use gfx::{ BufferHandle, BufferUsage, DrawState, Frame, Graphics, PrimitiveType, ProgramError, Resources, RawBufferHandle };
-use gfx_device_gl::Device as GlDevice;
-use gfx_device_gl::Resources as GlResources;
-use gfx_device_gl::Factory as GlFactory;
-use gfx_texture::{ self, Texture };
 use std::default::Default;
 use std::path::Path;
-use vecmath::*;
+
+use collada;
+use gfx;
+use gfx::traits::*;
+use gfx_texture;
+use vecmath;
 
 const MAX_JOINTS: usize = 64;
 
-pub struct SkinnedRenderBatch {
-    skinning_transforms_buffer: BufferHandle<GlResources, [[f32; 4]; 4]>,
-    batch: RefBatch<SkinnedShaderParams<GlResources>>,
+pub struct SkinnedRenderBatch<R: gfx::Resources> {
+    skinning_transforms_buffer: gfx::BufferHandle<R, [[f32; 4]; 4]>,
+    batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
 }
 
-pub struct SkinnedRenderer {
-    skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
-    render_batches: Vec<SkinnedRenderBatch>,
+pub struct SkinnedRenderer<R: gfx::Resources> {
+    skeleton: collada::Skeleton, // TODO Should this be a ref? Should this just be the joints?
+    render_batches: Vec<SkinnedRenderBatch<R>>,
 }
 
-///
-/// TEMP - Rust nightly doesn't like geometry::Object::add_object ...
-/// So we'll just do it ourselves here..
-///
+impl<R: gfx::Resources> SkinnedRenderer<R> {
 
-fn vtn_to_vertex(a: collada::VTNIndex, obj: &collada::Object) -> SkinnedVertex
-{
-    let mut vertex: SkinnedVertex = Default::default();
-    let position = obj.vertices[a.0];
-
-    vertex.pos = [position.x as f32, position.y as f32, position.z as f32];
-
-    if obj.joint_weights.len() == obj.vertices.len() {
-        let weights = obj.joint_weights[a.0];
-        vertex.joint_weights = weights.weights;
-        vertex.joint_indices = [
-            weights.joints[0] as i32,
-            weights.joints[1] as i32,
-            weights.joints[2] as i32,
-            weights.joints[3] as i32,
-        ];
-    }
-
-    if let Some(uv) = a.1 {
-        let uv = obj.tex_vertices[uv];
-        vertex.uv = [uv.x as f32, uv.y as f32];
-    }
-
-    if let Some(normal) = a.2 {
-        let normal = obj.normals[normal];
-        vertex.normal = [normal.x as f32, normal.y as f32, normal.z as f32];
-    }
-
-    vertex
-}
-
-fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
-    for geom in obj.geometry.iter() {
-        let start = index_data.len();
-        let mut i = vertex_data.len() as u32;
-        let mut uvs: u32 = 0;
-        let mut normals: u32 = 0;
-        {
-            let mut add = |a: collada::VTNIndex| {
-                if let Some(_) = a.1 { uvs += 1; }
-                if let Some(_) = a.2 { normals += 1; }
-                vertex_data.push(vtn_to_vertex(a, obj));
-                index_data.push(i);
-                i += 1;
-            };
-            for shape in geom.shapes.iter() {
-                match shape {
-                    &collada::Shape::Triangle(a, b, c) => {
-                        add(a);
-                        add(b);
-                        add(c);
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-}
-
-impl SkinnedRenderer {
-
-    pub fn from_collada(
-        graphics: &mut Graphics<GlDevice, GlFactory>,
-        collada_document: ColladaDocument,
+    pub fn from_collada<
+        C: gfx::CommandBuffer<R>,
+        F: gfx::Factory<R>,
+        D: Device<Resources = R, CommandBuffer = C>,
+    > (
+        graphics: &mut gfx::Graphics<D, F>,
+        collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
-    ) -> Result<SkinnedRenderer, ProgramError> {
+    ) -> Result<SkinnedRenderer<R>, gfx::ProgramError> {
 
         let program = match graphics.factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
             Ok(program_handle) => program_handle,
@@ -121,35 +54,35 @@ impl SkinnedRenderer {
 
             let mesh = graphics.factory.create_mesh(vertex_data.as_slice());
 
-            let state = DrawState::new().depth(Comparison::LessEqual, true);
+            let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
             let slice = graphics.factory
                 .create_buffer_index::<u32>(index_data.as_slice())
-                .to_slice(PrimitiveType::TriangleList);
+                .to_slice(gfx::PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = graphics.factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, BufferUsage::Dynamic);
+            let skinning_transforms_buffer = graphics.factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
 
-            let texture = Texture::from_path(
+            let texture = gfx_texture::Texture::from_path(
                 &mut graphics.factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
 
             let sampler = graphics.factory.create_sampler(
-                SamplerInfo::new(
-                    FilterMethod::Trilinear,
-                    WrapMode::Clamp
+                gfx::tex::SamplerInfo::new(
+                    gfx::tex::FilterMethod::Trilinear,
+                    gfx::tex::WrapMode::Clamp
                     )
                 );
 
             let shader_params = SkinnedShaderParams {
-                u_model_view_proj: mat4_id(),
-                u_model_view: mat4_id(),
+                u_model_view_proj: vecmath::mat4_id(),
+                u_model_view: vecmath::mat4_id(),
                 u_skinning_transforms: skinning_transforms_buffer.raw().clone(),
                 u_texture: (texture.handle, Some(sampler)),
             };
 
-            let batch: RefBatch<SkinnedShaderParams<GlResources>> = graphics.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
+            let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = graphics.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
 
             render_batches.push(SkinnedRenderBatch {
                 batch: batch,
@@ -164,13 +97,17 @@ impl SkinnedRenderer {
         })
     }
 
-    pub fn render(
+    pub fn render<
+        C: gfx::CommandBuffer<R>,
+        F: gfx::Factory<R>,
+        D: Device<Resources = R, CommandBuffer = C>,
+    >(
         &mut self,
-        graphics: &mut Graphics<GlDevice, GlFactory>,
-        frame: &Frame<GlResources>,
+        graphics: &mut gfx::Graphics<D, F>,
+        frame: &gfx::Frame<R>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        joint_poses: &[Matrix4<f32>]
+        joint_poses: &[vecmath::Matrix4<f32>]
     ) {
 
         let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
@@ -189,23 +126,23 @@ impl SkinnedRenderer {
     ///
     /// TODO - don't allocate a new vector
     ///
-    pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
+    pub fn calculate_skinning_transforms(&self, global_poses: &[vecmath::Matrix4<f32>]) -> Vec<vecmath::Matrix4<f32>> {
 
         use std::f32::consts::PI;
         use std::num::{Float};
 
         self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
-            row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
+            vecmath::row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
         }).collect()
     }
 }
 
 #[shader_param]
-struct SkinnedShaderParams<R: Resources> {
+struct SkinnedShaderParams<R: gfx::Resources> {
     u_model_view_proj: [[f32; 4]; 4],
     u_model_view: [[f32; 4]; 4],
-    u_skinning_transforms: RawBufferHandle<R>,
-    u_texture: TextureParam<R>,
+    u_skinning_transforms: gfx::RawBufferHandle<R>,
+    u_texture: gfx::shade::TextureParam<R>,
 }
 
 #[vertex_format]
@@ -301,3 +238,62 @@ static SKINNED_FRAGMENT_SHADER: &'static [u8] = b"
         out_color = vec4(intensity, intensity, intensity, 1.0) * texColor;
     }
 ";
+
+fn vtn_to_vertex(a: collada::VTNIndex, obj: &collada::Object) -> SkinnedVertex
+{
+    let mut vertex: SkinnedVertex = Default::default();
+    let position = obj.vertices[a.0];
+
+    vertex.pos = [position.x as f32, position.y as f32, position.z as f32];
+
+    if obj.joint_weights.len() == obj.vertices.len() {
+        let weights = obj.joint_weights[a.0];
+        vertex.joint_weights = weights.weights;
+        vertex.joint_indices = [
+            weights.joints[0] as i32,
+            weights.joints[1] as i32,
+            weights.joints[2] as i32,
+            weights.joints[3] as i32,
+        ];
+    }
+
+    if let Some(uv) = a.1 {
+        let uv = obj.tex_vertices[uv];
+        vertex.uv = [uv.x as f32, uv.y as f32];
+    }
+
+    if let Some(normal) = a.2 {
+        let normal = obj.normals[normal];
+        vertex.normal = [normal.x as f32, normal.y as f32, normal.z as f32];
+    }
+
+    vertex
+}
+
+fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
+    for geom in obj.geometry.iter() {
+        let start = index_data.len();
+        let mut i = vertex_data.len() as u32;
+        let mut uvs: u32 = 0;
+        let mut normals: u32 = 0;
+        {
+            let mut add = |a: collada::VTNIndex| {
+                if let Some(_) = a.1 { uvs += 1; }
+                if let Some(_) = a.2 { normals += 1; }
+                vertex_data.push(vtn_to_vertex(a, obj));
+                index_data.push(i);
+                i += 1;
+            };
+            for shape in geom.shapes.iter() {
+                match shape {
+                    &collada::Shape::Triangle(a, b, c) => {
+                        add(a);
+                        add(b);
+                        add(c);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}

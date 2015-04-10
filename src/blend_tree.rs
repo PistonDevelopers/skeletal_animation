@@ -5,7 +5,7 @@ use std::io::Read;
 use std::rc::Rc;
 
 use interpolation;
-use rustc_serialize::{self, Decodable, Decoder, json};
+use rustc_serialize::{Decodable, Decoder, json};
 
 use animation::{AnimationClip, SQT};
 use math;
@@ -13,62 +13,17 @@ use math;
 pub type ClipId = String;
 pub type ParamId = String;
 
-pub enum BlendTreeNode {
-    LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
-    ClipNode(Rc<RefCell<AnimationClip>>),
-}
-
-
+///
+/// Definition of a blend tree, to be converted to BlendTreeNode
+/// at runtime
+///
 #[derive(Clone)]
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
     ClipNode(ClipId),
 }
 
-impl BlendTreeNodeDef {
-    pub fn from_path(path: &str) -> Result<BlendTreeNodeDef, &'static str> {
-        let file_result = File::open(path);
-
-        let mut file = match file_result {
-            Ok(file) => file,
-            Err(_) => return Err("Failed to open definition file at path.")
-        };
-
-        let mut json_string = String::new();
-        match file.read_to_string(&mut json_string) {
-            Ok(_) => {},
-            Err(_) => return Err("Failed to read definition file.")
-        };
-
-        Ok(json::decode(&json_string[..]).unwrap())
-    }
-}
-
-impl BlendTreeNodeDef {
-
-    pub fn get_parameters(&self) -> Vec<String> {
-        let mut parameters = Vec::new();
-        self.get_parameters_internal(&mut parameters);
-        parameters
-    }
-
-    fn get_parameters_internal(&self, parameters: &mut Vec<String>) {
-        match self {
-            &BlendTreeNodeDef::LerpNode(ref input_1, ref input_2, ref param_name) => {
-
-                if !parameters.iter().any(|p| p == param_name) {
-                    parameters.push(param_name.clone());
-                }
-                input_1.get_parameters_internal(parameters);
-                input_2.get_parameters_internal(parameters);
-            },
-            &BlendTreeNodeDef::ClipNode(_) => {}
-        }
-    }
-}
-
 impl Decodable for BlendTreeNodeDef {
-
     fn decode<D: Decoder>(decoder: &mut D) -> Result<BlendTreeNodeDef, D::Error> {
         decoder.read_struct("root", 0, |decoder| {
 
@@ -78,7 +33,7 @@ impl Decodable for BlendTreeNodeDef {
                 "LerpNode" => {
 
                     let (input_1, input_2) = try!(decoder.read_struct_field("inputs", 0, |decoder| {
-                        decoder.read_seq(|decoder, len| {
+                        decoder.read_seq(|decoder, _len| {
                             Ok((
                                 try!(decoder.read_seq_elt(0, Decodable::decode)),
                                 try!(decoder.read_seq_elt(1, Decodable::decode))
@@ -99,7 +54,23 @@ impl Decodable for BlendTreeNodeDef {
             }
         })
     }
+}
 
+///
+/// Runtime representation of a blend tree.
+///
+pub enum BlendTreeNode {
+    ///
+    /// Pose output is linearly blend between the output of
+    /// two child BlendTreeNodes, with blend factor according
+    /// the paramater value for name ParamId
+    ///
+    LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
+
+    ///
+    /// Pose output is from an AnimationClip
+    ///
+    ClipNode(Rc<RefCell<AnimationClip>>),
 }
 
 impl BlendTreeNode {

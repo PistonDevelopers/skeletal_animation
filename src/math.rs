@@ -70,7 +70,7 @@ pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
         let k = next[j];
 
         let t = (m[i][i] - (m[j][j] + m[k][k])) + 1.0;
-        let s = t.rsqrt() * 0.5;
+        let s = inv_sqrt(t) * 0.5;
 
         q[i] = s * t;
         q[3] = (m[j][k] - m[k][j]) * s;

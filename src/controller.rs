@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use collada::Skeleton;
 use rustc_serialize::{self, Decodable, Decoder, json};
 use interpolation;
 
 use animation::{SQT, AnimationClip};
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use math::*;
+use skeleton::Skeleton;
 
 const MAX_PARAMS: usize = 16;
 const MAX_JOINTS: usize = 64;

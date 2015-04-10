@@ -7,6 +7,7 @@ use gfx::traits::*;
 use gfx_texture;
 
 use math::*;
+use skeleton::Skeleton;
 
 const MAX_JOINTS: usize = 64;
 
@@ -16,7 +17,7 @@ pub struct SkinnedRenderBatch<R: gfx::Resources> {
 }
 
 pub struct SkinnedRenderer<R: gfx::Resources> {
-    skeleton: collada::Skeleton, // TODO Should this be a ref? Should this just be the joints?
+    skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R>>,
 }
 
@@ -41,7 +42,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
 
         let mut skeleton_set = collada_document.get_skeletons().unwrap();
         let mut animations = collada_document.get_animations();
-        let mut skeleton = &skeleton_set[0];
+        let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 
         let mut render_batches = Vec::new();
 

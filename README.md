@@ -137,7 +137,7 @@ In event loop, on update:
 
 ```
 // Set any relevant parameters on the controller:
-controller..set_param_value("forward-speed", 1.8);
+controller.set_param_value("forward-speed", 1.8);
 
 // Update the controller's local clock
 controller.update(delta_time);

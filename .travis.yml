@@ -1,12 +1,6 @@
 language: rust
-env:
-  global:
-    - secure: bOb5DsFQQclV/uEMXEJnHzD4r5QZIwwEF/R+R6FTLpli3KMEV9cNy5/EVv1rKqoMUDBl8w+9If+/6FSEU03OhuVHrOL8u33WrsP3SLRNvC1JDyvdGbNeJacjGhbNocfC0wJPkDe0HFqpqL4cgg/f2xiMLwzllihTeMpoU17Fwvw=
 script:
-    - cargo build -v
-    - cargo test -v
-    - cargo doc -v
+  - cargo build -v
+  - cargo doc -v
 after_success:
-    - cp -R target/doc doc
-    - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
-    - rm -r doc
+  - curl https://raw.githubusercontent.com/PistonDevelopers/docs/gh-pages/travis-doc-upload.sh | sh

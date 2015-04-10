@@ -1,6 +1,14 @@
-use vecmath::Matrix4;
-use quaternion::Quaternion;
 use std::mem;
+
+pub use vecmath::{
+    Vector3,
+    Matrix4,
+    row_mat4_mul,
+    row_mat4_transform,
+    mat4_id,
+};
+
+pub use quaternion::Quaternion;
 
 pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {
 
@@ -18,20 +26,6 @@ pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor:
     (w * inv_sqrt_len, [x  * inv_sqrt_len, y  * inv_sqrt_len, z  * inv_sqrt_len])
 }
 
-pub fn inv_sqrt(x: f32) -> f32 {
-
-    let x2: f32 = x * 0.5;
-    let mut y: f32 = x;
-
-    let mut i: i32 = unsafe { mem::transmute(y) };
-    i = 0x5f3759df - (i >> 1);
-    y = unsafe { mem::transmute(i) };
-
-    y = y * (1.5 - (x2 * y * y));
-    y
-
-}
-
 /// rotation matrix for `a` radians about z
 pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
     [
@@ -41,7 +35,6 @@ pub fn mat4_rotate_z(a: f32) -> Matrix4<f32> {
         [0.0, 0.0, 0.0, 1.0],
     ]
 }
-
 
 pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
 
@@ -77,7 +70,7 @@ pub fn matrix_to_quaternion(m: &Matrix4<f32>) -> Quaternion<f32> {
         let k = next[j];
 
         let t = (m[i][i] - (m[j][j] + m[k][k])) + 1.0;
-        let s = inv_sqrt(t) * 0.5;
+        let s = t.rsqrt() * 0.5;
 
         q[i] = s * t;
         q[3] = (m[j][k] - m[k][j]) * s;
@@ -123,3 +116,18 @@ pub fn quaternion_to_matrix(q: Quaternion<f32>) -> Matrix4<f32> {
     ]
 
 }
+
+pub fn inv_sqrt(x: f32) -> f32 {
+
+    let x2: f32 = x * 0.5;
+    let mut y: f32 = x;
+
+    let mut i: i32 = unsafe { mem::transmute(y) };
+    i = 0x5f3759df - (i >> 1);
+    y = unsafe { mem::transmute(i) };
+
+    y = y * (1.5 - (x2 * y * y));
+    y
+
+}
+

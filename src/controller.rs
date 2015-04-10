@@ -4,12 +4,11 @@ use std::rc::Rc;
 
 use collada::Skeleton;
 use rustc_serialize::{self, Decodable, Decoder, json};
-use vecmath::{self, Matrix4};
 use interpolation;
 
 use animation::{SQT, AnimationClip};
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
-use math;
+use math::*;
 
 const MAX_PARAMS: usize = 16;
 const MAX_JOINTS: usize = 64;
@@ -320,7 +319,7 @@ impl AnimationController {
                 let pose_2 = target_poses[i];
                 pose_1.scale = interpolation::lerp(&pose_1.scale, &pose_2.scale, &blend_parameter);
                 pose_1.translation = interpolation::lerp(&pose_1.translation, &pose_2.translation, &blend_parameter);
-                pose_1.rotation = math::lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
+                pose_1.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
             }
 
         }
@@ -343,18 +342,18 @@ impl AnimationController {
             let parent_pose = if !joint.is_root() {
                 global_poses[joint.parent_index as usize]
             } else {
-                vecmath::mat4_id()
+                mat4_id()
             };
 
             let local_pose_sqt = &local_poses[joint_index];
 
-            let mut local_pose = math::quaternion_to_matrix(local_pose_sqt.rotation);
+            let mut local_pose = quaternion_to_matrix(local_pose_sqt.rotation);
 
             local_pose[0][3] = local_pose_sqt.translation[0];
             local_pose[1][3] = local_pose_sqt.translation[1];
             local_pose[2][3] = local_pose_sqt.translation[2];
 
-            global_poses[joint_index] = vecmath::row_mat4_mul(parent_pose, local_pose);
+            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose);
         }
     }
 

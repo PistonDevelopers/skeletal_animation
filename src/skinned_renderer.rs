@@ -5,7 +5,8 @@ use collada;
 use gfx;
 use gfx::traits::*;
 use gfx_texture;
-use vecmath;
+
+use math::*;
 
 const MAX_JOINTS: usize = 64;
 
@@ -76,8 +77,8 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
                 );
 
             let shader_params = SkinnedShaderParams {
-                u_model_view_proj: vecmath::mat4_id(),
-                u_model_view: vecmath::mat4_id(),
+                u_model_view_proj: mat4_id(),
+                u_model_view: mat4_id(),
                 u_skinning_transforms: skinning_transforms_buffer.raw().clone(),
                 u_texture: (texture.handle, Some(sampler)),
             };
@@ -107,7 +108,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         frame: &gfx::Frame<R>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        joint_poses: &[vecmath::Matrix4<f32>]
+        joint_poses: &[Matrix4<f32>]
     ) {
 
         let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
@@ -126,13 +127,13 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
     ///
     /// TODO - don't allocate a new vector
     ///
-    pub fn calculate_skinning_transforms(&self, global_poses: &[vecmath::Matrix4<f32>]) -> Vec<vecmath::Matrix4<f32>> {
+    pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
 
         use std::f32::consts::PI;
         use std::num::{Float};
 
         self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
-            vecmath::row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
+            row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
         }).collect()
     }
 }

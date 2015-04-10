@@ -96,7 +96,7 @@ Define the AnimationController in another JSON file, eg `human_controller.json`:
 
 Load the skeleton from a Collada source file:
 
-```
+```Rust
 let skeleton = {
 	let collada_document = ColladaDocument::from_path(&Path::new("assets/suit_guy.dae")).unwrap();
 	let skeleton_set = collada_document.get_skeletons().unwrap();
@@ -107,27 +107,27 @@ let skeleton = {
 
 Load animation clips through the AssetManager:
 
-```
+```Rust
 let mut asset_manager = AssetManager::new();
 asset_manager.load_animations("assets/animation_clips.json");
 ```
 
 Load the animation controller definition:
 
-```
+```Rust
 let controller_def = AssetManager::load_def_from_path("assets/human_controller.json").unwrap();
 ```
 
 Instantiate an AnimationController using the controller definition, the skeleton, and a mapping of names to AnimationClips.
 
-```
+```Rust
 let mut controller = AnimationController::new(controller_def, skeleton.clone(), &asset_manager.animation_clips);
 
 ```
 
 (Optional) Instantiate the bundled SkinnedRenderer (for rendering a skinned mesh given a skeletal pose)
 
-```
+```Rust
 let mut skinned_renderer = SkinnedRenderer::from_collada(&mut graphics, collada_document, texture_paths).unwrap();
 ```
 
@@ -135,7 +135,7 @@ let mut skinned_renderer = SkinnedRenderer::from_collada(&mut graphics, collada_
 
 In event loop, on update:
 
-```
+```Rust
 // Set any relevant parameters on the controller:
 controller.set_param_value("forward-speed", 1.8);
 
@@ -148,7 +148,7 @@ controller.update(delta_time);
 
 In event loop, on render:
 
-```
+```Rust
 // Get output pose for skeleton from the controller:
 let mut global_poses: [Matrix4<f32>; 64] = [ mat4_id(); 64 ];
 controller.get_output_pose(args.ext_dt, &mut global_poses[0 .. skeleton.borrow().joints.len()]);

@@ -1,6 +1,5 @@
 use collada::Animation as ColladaAnim;
 use collada::document::ColladaDocument;
-use collada::Skeleton;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::num::Float;
@@ -19,6 +18,8 @@ use rustc_serialize::{self, Decodable, Decoder, json};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+use skeleton::Skeleton;
 
 ///
 /// SQT - (Scale, Quaternion, Translation)

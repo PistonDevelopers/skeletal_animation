@@ -33,7 +33,7 @@ pub use animation::{
 };
 
 pub use skeleton::{
-    draw_skeleton,
+    Skeleton,
 };
 
 pub use blend_tree::{

@@ -10,6 +10,7 @@ use rustc_serialize::{self, Decodable, Decoder, json};
 
 use animation::AnimationClip;
 use math;
+use skeleton::Skeleton;
 
 ///
 /// Asset manager - manages memory for loaded assets...?
@@ -73,9 +74,9 @@ impl AssetManager {
                     let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
                     let animations = collada_document.get_animations();
                     let mut skeleton_set = collada_document.get_skeletons().unwrap();
-                    let skeleton = &skeleton_set[0];
+                    let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 
-                    let mut clip = AnimationClip::from_collada(skeleton, &animations, &adjust);
+                    let mut clip = AnimationClip::from_collada(&skeleton, &animations, &adjust);
 
                     if !duration.is_nan() {
                         clip.set_duration(duration);

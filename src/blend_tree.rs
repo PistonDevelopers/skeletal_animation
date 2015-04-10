@@ -8,7 +8,7 @@ use interpolation;
 use rustc_serialize::{self, Decodable, Decoder, json};
 
 use animation::{AnimationClip, SQT};
-use math::lerp_quaternion;
+use math;
 
 pub type ClipId = String;
 pub type ParamId = String;
@@ -124,7 +124,7 @@ impl BlendTreeNode {
             }
 
             BlendTreeNodeDef::ClipNode(clip_id) => {
-                let clip = &animations[&clip_id[..]];
+                let clip = animations.get(&clip_id[..]).expect(&format!("Missing animation clip: {}", clip_id)[..]);
                 BlendTreeNode::ClipNode(clip.clone())
             }
         }
@@ -151,7 +151,7 @@ impl BlendTreeNode {
                     let pose_2 = &mut output_poses[i];
                     pose_2.scale = interpolation::lerp(&pose_1.scale, &pose_2.scale, &blend_parameter);
                     pose_2.translation = interpolation::lerp(&pose_1.translation, &pose_2.translation, &blend_parameter);
-                    pose_2.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
+                    pose_2.rotation = math::lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
                 }
 
             }

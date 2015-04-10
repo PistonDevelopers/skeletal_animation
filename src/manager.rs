@@ -7,7 +7,6 @@ use std::rc::Rc;
 
 use collada::document::ColladaDocument;
 use rustc_serialize::{self, Decodable, Decoder, json};
-use vecmath;
 
 use animation::AnimationClip;
 use math;
@@ -68,7 +67,7 @@ impl AssetManager {
                     let adjust = if !rotate_z_angle.is_nan() {
                         math::mat4_rotate_z(rotate_z_angle.to_radians())
                     } else {
-                        vecmath::mat4_id()
+                        math::mat4_id()
                     };
 
                     let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();

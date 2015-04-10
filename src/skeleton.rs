@@ -4,20 +4,21 @@ use std::rc::Rc;
 use collada::Skeleton;
 use gfx;
 use gfx_debug_draw::DebugRenderer;
-use vecmath::{self, Matrix4};
+
+use math::*;
 
 pub fn draw_skeleton<R: gfx::Resources>(skeleton: Rc<RefCell<Skeleton>>, global_poses: &[Matrix4<f32>], debug_renderer: &mut DebugRenderer<R>, draw_labels: bool) {
     for (joint_index, joint) in skeleton.borrow().joints.iter().enumerate() {
 
-        let joint_position = vecmath::row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
+        let joint_position = row_mat4_transform(global_poses[joint_index], [0.0, 0.0, 0.0, 1.0]);
 
-        let leaf_end = vecmath::row_mat4_transform(
+        let leaf_end = row_mat4_transform(
             global_poses[joint_index],
             [0.0, 1.0, 0.0, 1.0]
         );
 
         if !joint.is_root() {
-            let parent_position = vecmath::row_mat4_transform(global_poses[joint.parent_index as usize], [0.0, 0.0, 0.0, 1.0]);
+            let parent_position = row_mat4_transform(global_poses[joint.parent_index as usize], [0.0, 0.0, 0.0, 1.0]);
 
             // Draw bone (between joint and parent joint)
 
@@ -48,17 +49,17 @@ pub fn draw_skeleton<R: gfx::Resources>(skeleton: Rc<RefCell<Skeleton>>, global_
         }
 
         // Draw joint-relative axes
-        let p_x_axis = vecmath::row_mat4_transform(
+        let p_x_axis = row_mat4_transform(
             global_poses[joint_index],
             [1.0, 0.0, 0.0, 1.0]
         );
 
-        let p_y_axis = vecmath::row_mat4_transform(
+        let p_y_axis = row_mat4_transform(
             global_poses[joint_index],
             [0.0, 1.0, 0.0, 1.0]
         );
 
-        let p_z_axis = vecmath::row_mat4_transform(
+        let p_z_axis = row_mat4_transform(
             global_poses[joint_index],
             [0.0, 0.0, 1.0, 1.0]
         );

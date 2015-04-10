@@ -4,8 +4,6 @@ use collada::Skeleton;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::num::Float;
-use vecmath::{Vector3, Matrix4, mat4_id, row_mat4_transform, row_mat4_mul, mat4_transposed, mat4_sub};
-use quaternion::Quaternion;
 
 use gfx::{Device};
 
@@ -21,7 +19,6 @@ use rustc_serialize::{self, Decodable, Decoder, json};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-
 
 ///
 /// SQT - (Scale, Quaternion, Translation)

@@ -4,11 +4,13 @@
 
 A Rust library for data-driven skeletal animation.
 
+[Documentation](http://docs.piston.rs/skeletal_animation/skeletal_animation/)
+
 Usage:
 
 Declare animation clips to be loaded in a JSON file, eg `animation_clips.json`:
 
-```
+```json
 [{
 	"name": "walk-forward",
 	"source": "assets/walk.dae",
@@ -24,7 +26,7 @@ Declare animation clips to be loaded in a JSON file, eg `animation_clips.json`:
 
 Define the AnimationController in another JSON file, eg `human_controller.json`:
 
-```
+```json
 {
 	"parameters": [
 		"forward-speed",

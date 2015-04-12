@@ -7,6 +7,14 @@
 #![feature(std_misc)]
 #![plugin(gfx_macros)]
 
+//! A library for data-driven skeletal animation.
+//!
+//! A single skeletal animation is represented by an `AnimationClip`. An `AnimationClip` consists
+//! of a sequence of `AnimationSamples`, which is a speficic parent-relative pose for each joint in the
+//! skeleton at some specific point on the `AnimationClip`'s timeline.
+//!
+//! Animations 
+
 extern crate collada;
 extern crate gfx;
 extern crate gfx_debug_draw;

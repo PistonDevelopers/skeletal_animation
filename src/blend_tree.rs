@@ -127,7 +127,7 @@ impl BlendTreeNode {
 
             }
             &BlendTreeNode::ClipNode(ref clip) => {
-                clip.borrow().get_interpolated_poses_at_time(elapsed_time, output_poses);
+                clip.borrow().get_pose_at_time(elapsed_time, output_poses);
             }
         }
     }

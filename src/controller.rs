@@ -356,5 +356,4 @@ impl AnimationController {
             global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose_matrix);
         }
     }
-
 }

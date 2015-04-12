@@ -7,7 +7,7 @@ use std::rc::Rc;
 use interpolation;
 use rustc_serialize::{Decodable, Decoder, json};
 
-use animation::{AnimationClip, SQT};
+use animation::{AnimationClip, Transform};
 use math;
 
 pub type ClipId = String;
@@ -104,11 +104,11 @@ impl BlendTreeNode {
     ///
     /// Get the output skeletal pose for this node and the given time and parameters
     ///
-    pub fn get_output_pose(&self, elapsed_time: f32, params: &HashMap<String, f32>, output_poses: &mut [SQT]) {
+    pub fn get_output_pose(&self, elapsed_time: f32, params: &HashMap<String, f32>, output_poses: &mut [Transform]) {
         match self {
             &BlendTreeNode::LerpNode(ref input_1, ref input_2, ref param_name) => {
 
-                let mut input_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+                let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
 
                 let sample_count = output_poses.len();
 

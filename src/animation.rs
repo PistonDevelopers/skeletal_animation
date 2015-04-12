@@ -8,9 +8,8 @@ use skeleton::Skeleton;
 
 /// Transformation represented by separate scaling, translation, and rotation factors.
 #[derive(Debug, Copy, Clone)]
-pub struct SQT
+pub struct Transform
 {
-
     /// Translation
     pub translation: Vector3<f32>,
 
@@ -29,7 +28,7 @@ pub struct AnimationSample
 
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
-    pub local_poses: Vec<SQT>,
+    pub local_poses: Vec<Transform>,
 
 }
 
@@ -59,7 +58,7 @@ impl AnimationClip {
     /// * `time` - The time to sample with, relative to the start of the animation
     /// * `blended_poses` - The output array slice of joint transforms that will be populated
     ///                     for each joint in the skeleton.
-    pub fn get_pose_at_time(&self, elapsed_time: f32, blended_poses: &mut [SQT]) {
+    pub fn get_pose_at_time(&self, elapsed_time: f32, blended_poses: &mut [Transform]) {
 
         let interpolated_index = elapsed_time * self.samples_per_second;
 
@@ -141,9 +140,9 @@ impl AnimationClip {
                 }
             }).collect();
 
-            // Convert local poses to SQT (for interpolation)
-            let local_poses: Vec<SQT> = local_poses.iter().map(|pose_matrix| {
-                SQT {
+            // Convert local poses to Transforms (for interpolation)
+            let local_poses: Vec<Transform> = local_poses.iter().map(|pose_matrix| {
+                Transform {
                     translation: [
                         pose_matrix[0][3],
                         pose_matrix[1][3],

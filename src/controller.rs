@@ -5,7 +5,7 @@ use std::rc::Rc;
 use rustc_serialize::{self, Decodable, Decoder, json};
 use interpolation;
 
-use animation::{SQT, AnimationClip};
+use animation::{Transform, AnimationClip};
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use math::*;
 use skeleton::Skeleton;
@@ -287,7 +287,7 @@ impl AnimationController {
 
         let current_state = &self.states[&self.current_state[..]];
 
-        let mut local_poses = [ SQT {
+        let mut local_poses = [ Transform {
             translation: [0.0, 0.0, 0.0],
             scale: 0.0,
             rotation: (0.0, [0.0, 0.0, 0.0])
@@ -302,7 +302,7 @@ impl AnimationController {
 
             // Blend with the target state ...
 
-            let mut target_poses = [ SQT {
+            let mut target_poses = [ Transform {
                 translation: [0.0, 0.0, 0.0],
                 scale: 0.0,
                 rotation: (0.0, [0.0, 0.0, 0.0])
@@ -333,7 +333,7 @@ impl AnimationController {
     ///
     pub fn calculate_global_poses(
         &self,
-        local_poses: &[SQT],
+        local_poses: &[Transform],
         global_poses: &mut [Matrix4<f32>],
     ) {
 
@@ -345,15 +345,15 @@ impl AnimationController {
                 mat4_id()
             };
 
-            let local_pose_sqt = &local_poses[joint_index];
+            let local_pose = &local_poses[joint_index];
 
-            let mut local_pose = quaternion_to_matrix(local_pose_sqt.rotation);
+            let mut local_pose_matrix = quaternion_to_matrix(local_pose.rotation);
 
-            local_pose[0][3] = local_pose_sqt.translation[0];
-            local_pose[1][3] = local_pose_sqt.translation[1];
-            local_pose[2][3] = local_pose_sqt.translation[2];
+            local_pose_matrix[0][3] = local_pose.translation[0];
+            local_pose_matrix[1][3] = local_pose.translation[1];
+            local_pose_matrix[2][3] = local_pose.translation[2];
 
-            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose);
+            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose_matrix);
         }
     }
 

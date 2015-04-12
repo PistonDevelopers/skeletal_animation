@@ -37,7 +37,7 @@ mod math;
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    SQT,
+    Transform,
 };
 
 pub use skeleton::{

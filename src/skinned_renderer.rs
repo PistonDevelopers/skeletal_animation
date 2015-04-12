@@ -103,10 +103,11 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         C: gfx::CommandBuffer<R>,
         F: gfx::Factory<R>,
         D: Device<Resources = R, CommandBuffer = C>,
+        O: gfx::render::target::Output<R>,
     >(
         &mut self,
         graphics: &mut gfx::Graphics<D, F>,
-        frame: &gfx::Frame<R>,
+        output: &O,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
         joint_poses: &[Matrix4<f32>]
@@ -121,7 +122,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
             // FIXME -- should all be able to share the same buffer
             graphics.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
 
-            graphics.draw(&material.batch, frame).unwrap();
+            graphics.draw(&material.batch, output).unwrap();
         }
     }
 

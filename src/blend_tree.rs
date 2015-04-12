@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -64,7 +63,7 @@ pub enum BlendTreeNode {
     LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
 
     /// Pose output is from an AnimationClip
-    ClipNode(Rc<RefCell<AnimationClip>>),
+    ClipNode(Rc<AnimationClip>),
 }
 
 impl BlendTreeNode {
@@ -78,7 +77,7 @@ impl BlendTreeNode {
     /// * `animations` - A mapping from ClipIds to shared AnimationClip instances
     pub fn from_def(
         def: BlendTreeNodeDef,
-        animations: &HashMap<ClipId, Rc<RefCell<AnimationClip>>>
+        animations: &HashMap<ClipId, Rc<AnimationClip>>
     ) -> BlendTreeNode {
 
         match def {
@@ -129,7 +128,7 @@ impl BlendTreeNode {
 
             }
             &BlendTreeNode::ClipNode(ref clip) => {
-                clip.borrow().get_pose_at_time(time, output_poses);
+                clip.get_pose_at_time(time, output_poses);
             }
         }
     }

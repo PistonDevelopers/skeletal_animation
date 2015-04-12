@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -166,7 +165,7 @@ pub struct AnimationController {
     /// Shared reference to the skeleton this controller is using
     ///
 
-    skeleton: Rc<RefCell<Skeleton>>,
+    skeleton: Rc<Skeleton>,
 
     ///
     /// Tracks seconds since controller started running
@@ -189,7 +188,7 @@ pub struct AnimationController {
 
 impl AnimationController {
 
-    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<RefCell<Skeleton>>, animations: &HashMap<ClipId, Rc<RefCell<AnimationClip>>>) -> AnimationController {
+    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip>>) -> AnimationController {
 
         let mut parameters = HashMap::new();
 
@@ -337,7 +336,7 @@ impl AnimationController {
         global_poses: &mut [Matrix4<f32>],
     ) {
 
-        for (joint_index, joint) in self.skeleton.borrow().joints.iter().enumerate() {
+        for (joint_index, joint) in self.skeleton.joints.iter().enumerate() {
 
             let parent_pose = if !joint.is_root() {
                 global_poses[joint.parent_index as usize]

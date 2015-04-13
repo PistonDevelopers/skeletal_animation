@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rustc_serialize::{self, Decodable, Decoder, json};
+use rustc_serialize::{Decodable, Decoder};
 use interpolation;
 
 use animation::{Transform, AnimationClip};
@@ -9,32 +9,51 @@ use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use math::*;
 use skeleton::Skeleton;
 
-const MAX_PARAMS: usize = 16;
 const MAX_JOINTS: usize = 64;
 
+/// A state that an AnimationController can be in, consisting
+/// of a blend tree and a collection of transitions to other states
 pub struct AnimationState {
-    blend_tree: BlendTreeNode,
-    transitions: Vec<AnimationTransition>,
+
+    /// The blend tree used to determine the final blended pose
+    /// for this state
+    pub blend_tree: BlendTreeNode,
+
+    /// Transitions from this state to other AnimationStates
+    pub transitions: Vec<AnimationTransition>,
 }
 
+/// Representation of a state transition to a target state, with a condition and a duration
 #[derive(Debug, Clone, RustcDecodable)]
 pub struct AnimationTransition {
-    target_state: String,
-    condition: TransitionCondition,
-    duration: f32,
+    /// The name of the target state to transition to
+    pub target_state: String,
+
+    /// The condition that will be checked in order to determine
+    /// if the controller should transition to the target state
+    pub condition: TransitionCondition,
+
+    /// The duration of the transition, during which a linear blend
+    /// transition between the current and target states should occur
+    pub duration: f32,
 }
 
+/// Representation of a condition to check for an AnimationTransition
 #[derive(Debug, Clone, RustcDecodable)]
 pub struct TransitionCondition {
-    parameter: String,
-    operator: Operator,
-    value: f32,
+
+    /// The name of the controller parameter to compare with
+    pub parameter: String,
+
+    /// The comparision operator to use
+    pub operator: Operator,
+
+    /// The constant value to compare with the controller parameter value
+    pub value: f32,
 }
 
 impl TransitionCondition {
-    ///
     /// Returns true if the condition is satisfied
-    ///
     pub fn is_true(&self, parameters: &HashMap<String, f32>) -> bool {
         match self.operator {
             Operator::LessThan => parameters[&self.parameter[..]] < self.value,
@@ -59,7 +78,6 @@ pub enum Operator {
 
 impl Decodable for Operator {
     fn decode<D: Decoder>(decoder: &mut D) -> Result<Operator, D::Error> {
-
         match &try!(decoder.read_str())[..] {
             "<" => Ok(Operator::LessThan),
             ">" => Ok(Operator::GreaterThan),
@@ -72,11 +90,19 @@ impl Decodable for Operator {
     }
 }
 
-
+/// Definition struct for an AnimationController, which can be deserialized from JSON
+/// and converted to an AnimationController instance at runtime
 pub struct AnimationControllerDef {
-    parameters: Vec<String>,
-    states: Vec<AnimationStateDef>,
-    initial_state: String,
+
+    /// Declaration list of all parameters that are used by the AnimationController,
+    /// including state transition conditions and blend tree parameters
+    pub parameters: Vec<String>,
+
+    /// List of animation state definitions
+    pub states: Vec<AnimationStateDef>,
+
+    /// The name of the state that the AnimationController should start in
+    pub initial_state: String,
 }
 
 impl Decodable for AnimationControllerDef {
@@ -116,10 +142,18 @@ impl Decodable for AnimationControllerDef {
     }
 }
 
+/// Definition struct for an AnimationState, which can be deserialized from JSON
+/// and converted to an AnimationState instance at runtime
 pub struct AnimationStateDef {
-    name: String,
-    blend_tree: BlendTreeNodeDef,
-    transitions: Vec<AnimationTransition>,
+
+    /// The identifying name for the state
+    pub name: String,
+
+    /// The blend tree definition for this state
+    pub blend_tree: BlendTreeNodeDef,
+
+    /// The transitions to other states that can occur from this state
+    pub transitions: Vec<AnimationTransition>,
 }
 
 impl Decodable for AnimationStateDef {
@@ -152,42 +186,39 @@ impl Decodable for AnimationStateDef {
 }
 
 
+/// A runtime representation of an Animation State Machine, consisting of one or more
+/// AnimationStates connected by AnimationTransitions, where the output animation
+/// pose depends on the current state or any active transitions between states.
 pub struct AnimationController {
 
-    ///
     /// Parameters that will be referenced by blend tree nodes and animation states
-    ///
-    ///
-    ///
     parameters: HashMap<String, f32>,
 
-    ///
     /// Shared reference to the skeleton this controller is using
-    ///
-
     skeleton: Rc<Skeleton>,
 
-    ///
     /// Tracks seconds since controller started running
-    ///
     local_clock: f64,
 
-    ///
     /// Playback speed multiplier.
-    ///
     playback_speed: f64,
 
-
+    /// Mapping of all animation state names to their instances
     states: HashMap<String, AnimationState>,
-    current_state: String,
-    transition: Option<(f64, AnimationTransition)>, // Transition with local clock time of transition start
 
+    /// The name of the current active AnimationState
+    current_state: String,
+
+    /// The current active AnimationTransition and its start time, if any
+    transition: Option<(f64, AnimationTransition)>,
 }
 
 
 
 impl AnimationController {
 
+    /// Create an AnimationController instance from its definition, the desired skeleton, and a
+    /// collection of currently loaded animation clips.
     pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip>>) -> AnimationController {
 
         let mut parameters = HashMap::new();
@@ -215,22 +246,21 @@ impl AnimationController {
         }
     }
 
+    /// Update the controller's local clock with the given time delta
     pub fn update(&mut self, delta_time: f64) {
         self.local_clock += delta_time * self.playback_speed;
     }
 
-    pub fn update_state(&mut self, ext_dt: f64) {
-
+    /// Checks if controller should transition to a different state, or if currently
+    /// in a transition, checks if the transition is complete
+    fn update_state(&mut self, ext_dt: f64) {
         match self.transition.clone() {
-
             Some((ref start_time, ref transition)) => {
-
                 // If transition is finished, switch state to new transition
                 if self.local_clock + ext_dt >= start_time + transition.duration as f64{
                     self.current_state = transition.target_state.clone();
                     self.transition = None;
                 }
-
             },
             None => {
 
@@ -242,42 +272,32 @@ impl AnimationController {
                         self.transition = Some((self.local_clock + ext_dt, transition.clone()));
                         break;
                     }
-
                 }
-
             }
         }
-
     }
 
-    ///
-    /// Set the value for the given parameter
-    ///
-    pub fn set_param_value(&mut self, name: &str, value: f32) {
-        self.parameters.insert(name.to_string(), value); // :(
-    }
-
+    /// Set the playback speed for the controller
     pub fn set_playback_speed(&mut self, speed: f64) {
         self.playback_speed = speed;
     }
 
-    ///
-    /// Return the value for the given parameter
-    ///
+    /// Set the value for the given controller parameter
+    pub fn set_param_value(&mut self, name: &str, value: f32) {
+        self.parameters.insert(name.to_string(), value); // :(
+    }
+
+    /// Return the value for the given controller parameter
     pub fn get_param_value(&self, name: &str) -> f32 {
         self.parameters[name]
     }
 
-    ///
-    /// Return a read-only reference to the parameter map
-    ///
+    /// Return a read-only reference to the controller parameter map
     pub fn get_parameters(&self) -> &HashMap<String, f32> {
         &self.parameters
     }
 
-    ///
-    /// Calculate GLOBAL skeletal joint poses for the given time since last update
-    ///
+    /// Calculate global skeletal joint poses for the given time since last update
     pub fn get_output_pose(&mut self, ext_dt: f64, output_poses: &mut [Matrix4<f32>]) {
 
         self.update_state(ext_dt);
@@ -324,13 +344,10 @@ impl AnimationController {
         }
 
         self.calculate_global_poses(&local_poses[..], output_poses);
-
     }
 
-    ///
     /// Calculate global poses from the controller's skeleton and the given local poses
-    ///
-    pub fn calculate_global_poses(
+    fn calculate_global_poses(
         &self,
         local_poses: &[Transform],
         global_poses: &mut [Matrix4<f32>],

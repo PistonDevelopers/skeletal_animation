@@ -192,3 +192,5 @@ skinned_renderer.render(
 	&global_poses // The output poses from the controller
 );
 ```
+
+See the [example demo](https://github.com/stjahns/skeletal_animation_demo) for a more thorough example of usage.

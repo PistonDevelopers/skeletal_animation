@@ -5,6 +5,7 @@
 A Rust library for data-driven skeletal animation.
 
 [Documentation](http://docs.piston.rs/skeletal_animation/skeletal_animation/)
+[Example Demo](https://github.com/stjahns/skeletal_animation_demo)
 
 ## Overview
 

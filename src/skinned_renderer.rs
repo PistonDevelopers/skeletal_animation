@@ -19,21 +19,20 @@ pub struct SkinnedRenderBatch<R: gfx::Resources> {
 pub struct SkinnedRenderer<R: gfx::Resources> {
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R>>,
+    context: gfx::render::batch::Context<R>,
 }
 
 impl<R: gfx::Resources> SkinnedRenderer<R> {
 
     pub fn from_collada<
-        C: gfx::CommandBuffer<R>,
         F: gfx::Factory<R>,
-        D: Device<Resources = R, CommandBuffer = C>,
     > (
-        graphics: &mut gfx::Graphics<D, F>,
+        factory: &mut F,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
     ) -> Result<SkinnedRenderer<R>, gfx::ProgramError> {
 
-        let program = match graphics.factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
+        let program = match factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
             Ok(program_handle) => program_handle,
             Err(e) => return Err(e),
         };
@@ -46,6 +45,8 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
 
         let mut render_batches = Vec::new();
 
+        let mut context = gfx::render::batch::Context::new();
+
         for (i, object) in obj_set.objects.iter().enumerate().take(6) {
 
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
@@ -54,28 +55,28 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let mesh = graphics.factory.create_mesh(vertex_data.as_slice());
+            let mesh = factory.create_mesh(vertex_data.as_slice());
 
             let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
-            let slice = graphics.factory
+            let slice = factory
                 .create_buffer_index::<u32>(index_data.as_slice())
                 .to_slice(gfx::PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = graphics.factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
+            let skinning_transforms_buffer = factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
 
             let texture = gfx_texture::Texture::from_path(
-                &mut graphics.factory,
+                factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
 
-            let sampler = graphics.factory.create_sampler(
+            let sampler = factory.create_sampler(
                 gfx::tex::SamplerInfo::new(
                     gfx::tex::FilterMethod::Trilinear,
                     gfx::tex::WrapMode::Clamp
-                    )
-                );
+                )
+            );
 
             let shader_params = SkinnedShaderParams {
                 u_model_view_proj: mat4_id(),
@@ -84,7 +85,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
                 u_texture: (texture.handle, Some(sampler)),
             };
 
-            let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = graphics.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
+            let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = context.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
 
             render_batches.push(SkinnedRenderBatch {
                 batch: batch,
@@ -96,17 +97,18 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         Ok(SkinnedRenderer {
             render_batches: render_batches,
             skeleton: skeleton.clone(),
+            context: context,
         })
     }
 
     pub fn render<
         C: gfx::CommandBuffer<R>,
         F: gfx::Factory<R>,
-        D: Device<Resources = R, CommandBuffer = C>,
         O: gfx::render::target::Output<R>,
     >(
         &mut self,
-        graphics: &mut gfx::Graphics<D, F>,
+        renderer: &mut gfx::Renderer<R, C>,
+        factory: &mut F,
         output: &O,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
@@ -120,9 +122,9 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
             material.batch.params.u_model_view_proj = projection;
 
             // FIXME -- should all be able to share the same buffer
-            graphics.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+            factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
 
-            graphics.draw(&material.batch, output).unwrap();
+            renderer.draw(&(&material.batch, &self.context), output).unwrap();
         }
     }
 

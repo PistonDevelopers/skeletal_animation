@@ -1,84 +1,64 @@
-use collada::Animation as ColladaAnim;
-use collada::document::ColladaDocument;
 use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::num::Float;
 
-use gfx::{Device};
+use collada;
+use interpolation::{self, Spatial};
 
 use math::*;
-
-use interpolation::{Spatial, lerp};
-
-use std::rc::Rc;
-use std::cell::RefCell;
-
-use rustc_serialize::{self, Decodable, Decoder, json};
-
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
-
 use skeleton::Skeleton;
 
-///
-/// SQT - (Scale, Quaternion, Translation)
-/// Transformation represented by separate scaling, translation, and rotation factors
-/// Necessary for rotational interpolation
-///
+/// Transformation represented by separate scaling, translation, and rotation factors.
 #[derive(Debug, Copy, Clone)]
-pub struct SQT
+pub struct Transform
 {
-    ///
-    /// 3D Translation
-    ///
+    /// Translation
     pub translation: Vector3<f32>,
-    ///
+
     /// Uniform scale factor.
-    ///
     pub scale: f32,
-    ///
+
     /// Rotation
-    ///
     pub rotation: Quaternion<f32>
+
 }
 
+/// A single skeletal pose
 #[derive(Debug)]
 pub struct AnimationSample
 {
-    ///
+
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
-    ///
-    pub local_poses: Vec<SQT>,
+    pub local_poses: Vec<Transform>,
+
 }
 
+/// A sequence of skeletal pose samples at some sample rate
 #[derive(Debug)]
 pub struct AnimationClip {
+
+    /// The sequence of skeletal poses
     pub samples: Vec<AnimationSample>,
 
-    ///
-    /// Assumes constant sample rate for animation
-    ///
+    /// Sample rate for the clip. Assumes a constant sample rate.
     pub samples_per_second: f32,
+
 }
 
 impl AnimationClip {
 
-    pub fn sample_at_time(&self, elapsed_time: f32) -> &AnimationSample {
-        let sample_index = (elapsed_time * self.samples_per_second) as usize % self.samples.len();
-        &self.samples[sample_index]
-    }
-
-    ///
-    /// Sets sample_per_second such that the animation will have the given
-    /// duration
-    ///
+    /// Overrides the sampling rate of the clip to give the given duration (in seconds).
     pub fn set_duration(&mut self, duration: f32) {
         self.samples_per_second = self.samples.len() as f32 / duration;
     }
 
-    pub fn get_interpolated_poses_at_time(&self, elapsed_time: f32, blended_poses: &mut [SQT]) {
+    /// Obtains the interpolated skeletal pose at the given sampling time.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - The time to sample with, relative to the start of the animation
+    /// * `blended_poses` - The output array slice of joint transforms that will be populated
+    ///                     for each joint in the skeleton.
+    pub fn get_pose_at_time(&self, elapsed_time: f32, blended_poses: &mut [Transform]) {
 
         let interpolated_index = elapsed_time * self.samples_per_second;
 
@@ -100,15 +80,25 @@ impl AnimationClip {
             let pose_2 = &sample_2.local_poses[i];
 
             let blended_pose = &mut blended_poses[i];
-            blended_pose.scale = lerp(&pose_1.scale, &pose_2.scale, &blend_factor);
-            blended_pose.translation = lerp(&pose_1.translation, &pose_2.translation, &blend_factor);
+            blended_pose.scale = interpolation::lerp(&pose_1.scale, &pose_2.scale, &blend_factor);
+            blended_pose.translation = interpolation::lerp(&pose_1.translation, &pose_2.translation, &blend_factor);
             blended_pose.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_factor);
 
         }
 
     }
 
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<ColladaAnim>, transform: &Matrix4<f32>) -> AnimationClip {
+    /// Creates an `AnimationClip` from a collection of `collada::Animation`.
+    ///
+    /// # Arguments
+    ///
+    /// * `skeleton` - The `Skeleton` that the `AnimationClip` will be created for.
+    /// * `animations` - The collection of `collada::Animation`s that will be converted into an
+    ///                  `AnimationClip`, using the given `Skeleton`.
+    /// * `transform` - An offset transform to apply to the root pose of each animation sample,
+    ///                 useful for applying rotation, translation, or scaling when loading an
+    ///                 animation.
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip { 
         use std::f32::consts::PI;
 
         // Z-axis is 'up' in COLLADA, so need to rotate root pose about x-axis so y-axis is 'up'
@@ -150,9 +140,9 @@ impl AnimationClip {
                 }
             }).collect();
 
-            // Convert local poses to SQT (for interpolation)
-            let local_poses: Vec<SQT> = local_poses.iter().map(|pose_matrix| {
-                SQT {
+            // Convert local poses to Transforms (for interpolation)
+            let local_poses: Vec<Transform> = local_poses.iter().map(|pose_matrix| {
+                Transform {
                     translation: [
                         pose_matrix[0][3],
                         pose_matrix[1][3],

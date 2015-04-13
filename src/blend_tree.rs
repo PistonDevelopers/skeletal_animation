@@ -1,22 +1,20 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Read;
 use std::rc::Rc;
 
 use interpolation;
-use rustc_serialize::{Decodable, Decoder, json};
+use rustc_serialize::{Decodable, Decoder};
 
-use animation::{AnimationClip, SQT};
+use animation::{AnimationClip, Transform};
 use math;
 
+/// Identifier for an AnimationClip within a BlendTreeNodeDef
 pub type ClipId = String;
+
+/// Identifier for animation controller parameter, within a LerpNode
 pub type ParamId = String;
 
-///
-/// Definition of a blend tree, to be converted to BlendTreeNode
-/// at runtime
-///
+/// Definition of a blend tree, to be converted to BlendTreeNode when used by an
+/// AnimationController
 #[derive(Clone)]
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
@@ -56,32 +54,30 @@ impl Decodable for BlendTreeNodeDef {
     }
 }
 
-///
 /// Runtime representation of a blend tree.
-///
 pub enum BlendTreeNode {
-    ///
+
     /// Pose output is linearly blend between the output of
     /// two child BlendTreeNodes, with blend factor according
     /// the paramater value for name ParamId
-    ///
     LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
 
-    ///
     /// Pose output is from an AnimationClip
-    ///
-    ClipNode(Rc<RefCell<AnimationClip>>),
+    ClipNode(Rc<AnimationClip>),
 }
 
 impl BlendTreeNode {
 
-    ///
     /// Initialize a new BlendTreeNode from a BlendTreeNodeDef and
     /// a mapping from animation names to AnimationClip
     ///
+    /// # Arguments
+    ///
+    /// * `def` - The root BlendTreeNodeDef
+    /// * `animations` - A mapping from ClipIds to shared AnimationClip instances
     pub fn from_def(
         def: BlendTreeNodeDef,
-        animations: &HashMap<ClipId, Rc<RefCell<AnimationClip>>>
+        animations: &HashMap<ClipId, Rc<AnimationClip>>
     ) -> BlendTreeNode {
 
         match def {
@@ -101,19 +97,24 @@ impl BlendTreeNode {
         }
     }
 
-    ///
     /// Get the output skeletal pose for this node and the given time and parameters
     ///
-    pub fn get_output_pose(&self, elapsed_time: f32, params: &HashMap<String, f32>, output_poses: &mut [SQT]) {
+    /// # Arguments
+    ///
+    /// * `time` - The time to sample from any AnimationClips
+    /// * `params` - A mapping from ParamIds to their current parameter values
+    /// * `output_poses` - The output array slice of joint transforms that will be populated
+    ///                    according to the defined output for this BlendTreeNode
+    pub fn get_output_pose(&self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [Transform]) {
         match self {
             &BlendTreeNode::LerpNode(ref input_1, ref input_2, ref param_name) => {
 
-                let mut input_poses = [ SQT { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+                let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
 
                 let sample_count = output_poses.len();
 
-                input_1.get_output_pose(elapsed_time, params, &mut input_poses[0 .. sample_count]);
-                input_2.get_output_pose(elapsed_time, params, output_poses);
+                input_1.get_output_pose(time, params, &mut input_poses[0 .. sample_count]);
+                input_2.get_output_pose(time, params, output_poses);
 
                 let blend_parameter = params[&param_name[..]];
 
@@ -127,7 +128,7 @@ impl BlendTreeNode {
 
             }
             &BlendTreeNode::ClipNode(ref clip) => {
-                clip.borrow().get_interpolated_poses_at_time(elapsed_time, output_poses);
+                clip.get_pose_at_time(time, output_poses);
             }
         }
     }

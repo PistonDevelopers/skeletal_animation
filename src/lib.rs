@@ -7,6 +7,8 @@
 #![feature(std_misc)]
 #![plugin(gfx_macros)]
 
+//! A library for data-driven skeletal animation.
+
 extern crate collada;
 extern crate gfx;
 extern crate gfx_debug_draw;
@@ -29,7 +31,7 @@ mod math;
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    SQT,
+    Transform,
 };
 
 pub use skeleton::{

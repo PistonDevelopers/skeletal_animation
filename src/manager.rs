@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -16,7 +15,7 @@ use skeleton::Skeleton;
 /// Asset manager - manages memory for loaded assets...?
 ///
 pub struct AssetManager {
-    pub animation_clips: HashMap<String, Rc<RefCell<AnimationClip>>>
+    pub animation_clips: HashMap<String, Rc<AnimationClip>>
 }
 
 impl AssetManager {
@@ -82,7 +81,7 @@ impl AssetManager {
                         clip.set_duration(duration);
                     }
 
-                    self.animation_clips.insert(name, Rc::new(RefCell::new(clip)));
+                    self.animation_clips.insert(name, Rc::new(clip));
 
                     Ok(())
                 });

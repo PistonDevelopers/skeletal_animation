@@ -101,6 +101,21 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         })
     }
 
+    pub fn render_canvas<
+        C: gfx::CommandBuffer<R>,
+        F: gfx::Factory<R>,
+        O: gfx::render::target::Output<R>,
+        D: Device<Resources = R, CommandBuffer = C>,
+    >(
+        &mut self,
+        canvas: &mut gfx::Canvas<O, D, F>,
+        view: [[f32; 4]; 4],
+        projection: [[f32; 4]; 4],
+        joint_poses: &[Matrix4<f32>]
+    ) {
+        self.render(&mut canvas.renderer, &mut canvas.factory, &canvas.output, view, projection, joint_poses);
+    }
+
     pub fn render<
         C: gfx::CommandBuffer<R>,
         F: gfx::Factory<R>,

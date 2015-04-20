@@ -1,7 +1,4 @@
-#![feature(collections)]
-#![feature(core)]
 #![feature(custom_attribute)]
-#![feature(old_path)]
 #![feature(plugin)]
 #![feature(convert)]
 #![feature(std_misc)]

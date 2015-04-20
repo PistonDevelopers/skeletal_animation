@@ -5,7 +5,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use collada::document::ColladaDocument;
-use rustc_serialize::{self, Decodable, Decoder, json};
+use rustc_serialize::{Decodable, Decoder, json};
 
 use animation::AnimationClip;
 use math;
@@ -53,13 +53,12 @@ impl AssetManager {
 
         let mut decoder = json::Decoder::new(json);
 
-        decoder.read_seq(|decoder, len| {
-            for i in (0 .. len) {
-                decoder.read_struct("root", 0, |decoder| {
+        let _ = decoder.read_seq(|decoder, len| {
+            for _ in (0 .. len) {
+                let _ = decoder.read_struct("root", 0, |decoder| {
 
                     let name = try!(decoder.read_struct_field("name", 0, |decoder| { Ok(try!(decoder.read_str())) }));
                     let source = try!(decoder.read_struct_field("source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                    let looping = try!(decoder.read_struct_field("looping", 0, |decoder| { Ok(try!(decoder.read_bool())) }));
                     let duration = try!(decoder.read_struct_field("duration", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
                     let rotate_z_angle = try!(decoder.read_struct_field("rotate-z", 0, |decoder| { Ok(try!(decoder.read_f32())) }));
 
@@ -72,7 +71,7 @@ impl AssetManager {
 
                     let collada_document = ColladaDocument::from_path(&Path::new(&source[..])).unwrap();
                     let animations = collada_document.get_animations();
-                    let mut skeleton_set = collada_document.get_skeletons().unwrap();
+                    let skeleton_set = collada_document.get_skeletons().unwrap();
                     let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 
                     let mut clip = AnimationClip::from_collada(&skeleton, &animations, &adjust);
@@ -116,7 +115,7 @@ fn read_json_file(path: &str) -> Result<json::Json, &'static str> {
 
     let json = match json::Json::from_str(&json_string[..]) {
         Ok(x) => x,
-        Err(e) => return Err("Failed to parse JSON")
+        Err(_) => return Err("Failed to parse JSON")
     };
 
     Ok(json)

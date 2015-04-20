@@ -82,7 +82,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
                 u_model_view_proj: mat4_id(),
                 u_model_view: mat4_id(),
                 u_skinning_transforms: skinning_transforms_buffer.raw().clone(),
-                u_texture: (texture.handle, Some(sampler)),
+                u_texture: (texture.handle(), Some(sampler)),
             };
 
             let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = context.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();

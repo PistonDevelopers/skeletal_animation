@@ -4,7 +4,8 @@ use std::rc::Rc;
 use rustc_serialize::{Decodable, Decoder};
 use interpolation;
 
-use animation::{Transform, AnimationClip};
+use animation::AnimationClip;
+use transform::Transform;
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use math::*;
 use skeleton::Skeleton;

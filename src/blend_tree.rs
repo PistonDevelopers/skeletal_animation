@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use rustc_serialize::{Decodable, Decoder};
 
-use animation::{AnimationClip, Transform};
+use animation::AnimationClip;
+use transform::Transform;
 
 /// Identifier for an AnimationClip within a BlendTreeNodeDef
 pub type ClipId = String;

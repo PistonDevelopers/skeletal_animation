@@ -23,13 +23,15 @@ pub mod blend_tree;
 pub mod controller;
 pub mod manager;
 pub mod skeleton;
+mod transform;
 mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    Transform,
 };
+
+pub use transform::Transform;
 
 pub use skeleton::{
     Skeleton,

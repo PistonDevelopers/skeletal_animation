@@ -25,7 +25,15 @@ pub struct Transform
 
 impl Transform {
 
-    fn add(self, other: Transform) -> Transform {
+    pub fn identity() -> Transform {
+        Transform {
+            translation: [0.0, 0.0, 0.0],
+            scale: 1.0,
+            rotation: quaternion_id(),
+        }
+    }
+
+    pub fn add(self, other: Transform) -> Transform {
         Transform {
             translation: vec3_add(self.translation, other.translation),
             scale: self.scale + other.scale,
@@ -33,11 +41,19 @@ impl Transform {
         }
     }
 
-    fn subtract(self, other: Transform) -> Transform {
+    pub fn subtract(self, other: Transform) -> Transform {
         Transform {
             translation: vec3_sub(self.translation, other.translation),
             scale: self.scale - other.scale,
             rotation: quaternion_mul(self.rotation, quaternion_conj(other.rotation)),
+        }
+    }
+
+    pub fn lerp(self, other: Transform, parameter: f32) -> Transform {
+        Transform {
+            translation: interpolation::lerp(&self.translation, &other.translation, &parameter),
+            scale: interpolation::lerp(&self.scale, &other.scale, &parameter),
+            rotation: lerp_quaternion(&self.rotation, &other.rotation, &parameter),
         }
     }
 }
@@ -149,7 +165,7 @@ impl AnimationClip {
 
     }
 
-    /// Create a difference clip for additive blending.
+    /// Create a difference clip from a source and reference clip for additive blending.
     pub fn as_difference_clip(source_clip: &AnimationClip, reference_clip: &AnimationClip) -> AnimationClip {
 
         let samples = (0 .. source_clip.samples.len()).map(|sample_index| {

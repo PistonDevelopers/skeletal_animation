@@ -10,6 +10,7 @@ pub use vecmath::{
     mat4_id,
 };
 
+pub use quaternion::id as quaternion_id;
 pub use quaternion::mul as quaternion_mul;
 pub use quaternion::conj as quaternion_conj;
 pub use quaternion::Quaternion;

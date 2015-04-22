@@ -44,7 +44,18 @@ impl AssetManager {
             }
         }
 
-        // TODO load difference clips
+        if let Some(difference_clips) = asset_defs.difference_clips {
+            for difference_clip_def in difference_clips.iter() {
+
+                let clip = {
+                    let ref source_clip = self.animation_clips[&difference_clip_def.source_clip[..]];
+                    let ref reference_clip = self.animation_clips[&difference_clip_def.reference_clip[..]];
+                    AnimationClip::as_difference_clip(source_clip, reference_clip)
+                };
+
+                self.animation_clips.insert(difference_clip_def.name.clone(), Rc::new(clip));
+            }
+        }
 
         if let Some(animation_controllers) = asset_defs.animation_controllers {
             for controller_def in animation_controllers.iter() {

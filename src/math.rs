@@ -3,11 +3,16 @@ use std::mem;
 pub use vecmath::{
     Vector3,
     Matrix4,
+    vec3_add,
+    vec3_sub,
     row_mat4_mul,
     row_mat4_transform,
     mat4_id,
 };
 
+pub use quaternion::id as quaternion_id;
+pub use quaternion::mul as quaternion_mul;
+pub use quaternion::conj as quaternion_conj;
 pub use quaternion::Quaternion;
 
 pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {

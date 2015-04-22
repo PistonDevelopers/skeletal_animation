@@ -1,7 +1,4 @@
-#![feature(collections)]
-#![feature(core)]
 #![feature(custom_attribute)]
-#![feature(old_path)]
 #![feature(plugin)]
 #![feature(convert)]
 #![feature(std_misc)]
@@ -26,13 +23,15 @@ pub mod blend_tree;
 pub mod controller;
 pub mod manager;
 pub mod skeleton;
+mod transform;
 mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
-    Transform,
 };
+
+pub use transform::Transform;
 
 pub use skeleton::{
     Skeleton,
@@ -43,7 +42,10 @@ pub use blend_tree::{
     BlendTreeNodeDef,
 };
 
-pub use manager::AssetManager;
+pub use manager::{
+    AssetManager,
+    AssetDefs,
+};
 
 pub use controller::AnimationController;
 

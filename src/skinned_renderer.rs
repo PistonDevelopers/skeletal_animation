@@ -39,8 +39,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
 
         let obj_set = collada_document.get_obj_set().unwrap();
 
-        let mut skeleton_set = collada_document.get_skeletons().unwrap();
-        let mut animations = collada_document.get_animations();
+        let skeleton_set = collada_document.get_skeletons().unwrap();
         let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 
         let mut render_batches = Vec::new();
@@ -147,10 +146,6 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
     /// TODO - don't allocate a new vector
     ///
     pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
-
-        use std::f32::consts::PI;
-        use std::num::{Float};
-
         self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
             row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
         }).collect()
@@ -292,7 +287,6 @@ fn vtn_to_vertex(a: collada::VTNIndex, obj: &collada::Object) -> SkinnedVertex
 
 fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVertex>, index_data: &mut Vec<u32>) {
     for geom in obj.geometry.iter() {
-        let start = index_data.len();
         let mut i = vertex_data.len() as u32;
         let mut uvs: u32 = 0;
         let mut normals: u32 = 0;

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::path::Path;
 
+use collada::document::ColladaDocument;
 use collada;
 use interpolation::{self, Spatial};
 
@@ -19,6 +21,25 @@ pub struct Transform
     /// Rotation
     pub rotation: Quaternion<f32>
 
+}
+
+impl Transform {
+
+    fn add(self, other: Transform) -> Transform {
+        Transform {
+            translation: vec3_add(self.translation, other.translation),
+            scale: self.scale + other.scale,
+            rotation: quaternion_mul(self.rotation, other.rotation),
+        }
+    }
+
+    fn subtract(self, other: Transform) -> Transform {
+        Transform {
+            translation: vec3_sub(self.translation, other.translation),
+            scale: self.scale - other.scale,
+            rotation: quaternion_mul(self.rotation, quaternion_conj(other.rotation)),
+        }
+    }
 }
 
 /// A single skeletal pose
@@ -44,7 +65,47 @@ pub struct AnimationClip {
 
 }
 
+#[derive(Debug, RustcDecodable)]
+pub struct AnimationClipDef {
+    pub name: String,
+    pub source: String,
+    pub duration: f32,
+    pub rotate_z: f32,
+}
+
+#[derive(Debug, RustcDecodable)]
+pub struct DifferenceClipDef {
+    pub name: String,
+    pub source_clip: String,
+    pub reference_clip: String,
+}
+
 impl AnimationClip {
+
+    pub fn from_def(clip_def: &AnimationClipDef) -> AnimationClip {
+
+        // Wacky. Shouldn't it be an error if the struct field isn't present?
+        // FIXME - use an Option
+        let adjust = if !clip_def.rotate_z.is_nan() {
+            mat4_rotate_z(clip_def.rotate_z.to_radians())
+        } else {
+            mat4_id()
+        };
+
+        // FIXME - load skeleton separately?
+        let collada_document = ColladaDocument::from_path(&Path::new(&clip_def.source[..])).unwrap();
+        let animations = collada_document.get_animations();
+        let skeleton_set = collada_document.get_skeletons().unwrap();
+        let skeleton = Skeleton::from_collada(&skeleton_set[0]);
+
+        let mut clip = AnimationClip::from_collada(&skeleton, &animations, &adjust);
+
+        if !clip_def.duration.is_nan() {
+            clip.set_duration(clip_def.duration);
+        }
+        clip
+
+    }
 
     /// Overrides the sampling rate of the clip to give the given duration (in seconds).
     pub fn set_duration(&mut self, duration: f32) {
@@ -88,6 +149,34 @@ impl AnimationClip {
 
     }
 
+    /// Create a difference clip for additive blending.
+    pub fn as_difference_clip(source_clip: &AnimationClip, reference_clip: &AnimationClip) -> AnimationClip {
+
+        let samples = (0 .. source_clip.samples.len()).map(|sample_index| {
+
+            let ref source_sample = source_clip.samples[sample_index];
+
+            // Extrapolate reference clip by wrapping, if reference clip is shorter than source clip
+            let ref reference_sample = reference_clip.samples[sample_index % reference_clip.samples.len()];
+
+            let difference_poses = (0 .. source_sample.local_poses.len()).map(|joint_index| {
+                let ref source_pose = source_sample.local_poses[joint_index];
+                let ref reference_pose = reference_sample.local_poses[joint_index];
+                source_pose.subtract(reference_pose.clone())
+            }).collect();
+
+            AnimationSample {
+                local_poses: difference_poses,
+            }
+
+        }).collect();
+
+        AnimationClip {
+            samples_per_second: source_clip.samples_per_second,
+            samples: samples,
+        }
+    }
+
     /// Creates an `AnimationClip` from a collection of `collada::Animation`.
     ///
     /// # Arguments
@@ -98,7 +187,7 @@ impl AnimationClip {
     /// * `transform` - An offset transform to apply to the root pose of each animation sample,
     ///                 useful for applying rotation, translation, or scaling when loading an
     ///                 animation.
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip { 
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip {
         use std::f32::consts::PI;
 
         // Z-axis is 'up' in COLLADA, so need to rotate root pose about x-axis so y-axis is 'up'
@@ -163,4 +252,5 @@ impl AnimationClip {
             samples: samples,
         }
     }
+
 }

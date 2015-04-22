@@ -92,7 +92,11 @@ impl Decodable for Operator {
 
 /// Definition struct for an AnimationController, which can be deserialized from JSON
 /// and converted to an AnimationController instance at runtime
+#[derive(Clone, Debug, RustcDecodable)]
 pub struct AnimationControllerDef {
+
+    /// Identifying name for the controller definition
+    pub name: String,
 
     /// Declaration list of all parameters that are used by the AnimationController,
     /// including state transition conditions and blend tree parameters
@@ -105,45 +109,9 @@ pub struct AnimationControllerDef {
     pub initial_state: String,
 }
 
-impl Decodable for AnimationControllerDef {
-    fn decode<D: Decoder>(decoder: &mut D) -> Result<AnimationControllerDef, D::Error> {
-        decoder.read_struct("root", 0, |decoder| {
-
-            let params = try!(decoder.read_struct_field("parameters", 0, |decoder| {
-                decoder.read_seq(|decoder, len| {
-                    let mut params = Vec::new();
-                    for i in (0 .. len) {
-                        params.push(try!(decoder.read_seq_elt(i, Decodable::decode)));
-                    }
-                    Ok(params)
-                })
-            }));
-
-            let states = try!(decoder.read_struct_field("states", 0, |decoder| {
-                decoder.read_seq(|decoder, len| {
-                    let mut states = Vec::new();
-                    for i in (0 .. len) {
-                        states.push(try!(decoder.read_seq_elt(i, Decodable::decode)));
-                    }
-                    Ok(states)
-                })
-            }));
-
-            let initial_state = try!(decoder.read_struct_field("initial_state", 0, |decoder| {
-                Ok(try!(decoder.read_str()))
-            }));
-
-            Ok(AnimationControllerDef{
-                parameters: params,
-                states: states,
-                initial_state: initial_state,
-            })
-        })
-    }
-}
-
 /// Definition struct for an AnimationState, which can be deserialized from JSON
 /// and converted to an AnimationState instance at runtime
+#[derive(Clone, Debug)]
 pub struct AnimationStateDef {
 
     /// The identifying name for the state

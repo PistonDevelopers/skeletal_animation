@@ -15,7 +15,7 @@ pub type ParamId = String;
 
 /// Definition of a blend tree, to be converted to BlendTreeNode when used by an
 /// AnimationController
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
     ClipNode(ClipId),

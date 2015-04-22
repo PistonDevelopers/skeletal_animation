@@ -40,7 +40,10 @@ pub use blend_tree::{
     BlendTreeNodeDef,
 };
 
-pub use manager::AssetManager;
+pub use manager::{
+    AssetManager,
+    AssetDefs,
+};
 
 pub use controller::AnimationController;
 

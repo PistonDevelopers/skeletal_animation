@@ -72,24 +72,24 @@ impl Decodable for BlendTreeNodeDef {
 }
 
 /// Runtime representation of a blend tree.
-pub enum BlendTreeNode {
+pub enum BlendTreeNode<T: Transform> {
 
     /// Pose output is linear blend between the output of
     /// two child BlendTreeNodes, with blend factor according
     /// the paramater value for name ParamId
-    LerpNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
+    LerpNode(Box<BlendTreeNode<T>>, Box<BlendTreeNode<T>>, ParamId),
 
     /// Pose output is additive blend between the output of
     /// two child BlendTreeNodes, with blend factor according
     /// the paramater value for name ParamId
-    AdditiveNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
+    AdditiveNode(Box<BlendTreeNode<T>>, Box<BlendTreeNode<T>>, ParamId),
 
     /// Pose output is from an animation ClipInstance
-    ClipNode(ClipInstance),
+    ClipNode(ClipInstance<T>),
 }
 
 
-impl BlendTreeNode {
+impl<T: Transform> BlendTreeNode<T> {
 
     /// Initialize a new BlendTreeNode from a BlendTreeNodeDef and
     /// a mapping from animation names to AnimationClip
@@ -100,8 +100,8 @@ impl BlendTreeNode {
     /// * `animations` - A mapping from ClipIds to shared AnimationClip instances
     pub fn from_def(
         def: BlendTreeNodeDef,
-        animations: &HashMap<ClipId, Rc<AnimationClip>>
-    ) -> BlendTreeNode {
+        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>
+    ) -> BlendTreeNode<T> {
 
         match def {
 
@@ -180,14 +180,14 @@ impl BlendTreeNode {
     /// * `params` - A mapping from ParamIds to their current parameter values
     /// * `output_poses` - The output array slice of joint transforms that will be populated
     ///                    according to the defined output for this BlendTreeNode
-    pub fn get_output_pose(&mut self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [Transform]) {
+    pub fn get_output_pose(&mut self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
 
         self.synchronize_subtree(time, params);
 
         match self {
             &mut BlendTreeNode::LerpNode(ref mut input_1, ref mut input_2, ref param_name) => {
 
-                let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+                let mut input_poses = [ T::identity(); 64 ];
 
                 let sample_count = output_poses.len();
 
@@ -206,7 +206,7 @@ impl BlendTreeNode {
             }
             &mut BlendTreeNode::AdditiveNode(ref mut input_1, ref mut input_2, ref param_name) => {
 
-                let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
+                let mut input_poses = [ T::identity(); 64 ];
 
                 let sample_count = output_poses.len();
 
@@ -218,7 +218,7 @@ impl BlendTreeNode {
                 for i in (0 .. output_poses.len()) {
                     let pose_1 = input_poses[i];
                     let pose_2 = &mut output_poses[i];
-                    let additive_pose = Transform::identity().lerp(pose_2.clone(), blend_parameter);
+                    let additive_pose = T::identity().lerp(pose_2.clone(), blend_parameter);
                     (*pose_2) = pose_1.add(additive_pose);
                 }
 

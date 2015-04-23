@@ -12,6 +12,7 @@ extern crate gfx_debug_draw;
 extern crate gfx_device_gl;
 extern crate gfx_texture;
 extern crate quaternion;
+extern crate dual_quaternion;
 extern crate vecmath;
 extern crate interpolation;
 extern crate rustc_serialize;
@@ -22,15 +23,15 @@ pub mod blend_tree;
 pub mod controller;
 pub mod manager;
 pub mod skeleton;
+pub mod math;
 mod transform;
-mod math;
 
 pub use animation::{
     AnimationClip,
     AnimationSample,
 };
 
-pub use transform::Transform;
+pub use transform::{Transform, QVTransform};
 
 pub use skeleton::{
     Skeleton,

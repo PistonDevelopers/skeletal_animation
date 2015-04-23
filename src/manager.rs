@@ -6,6 +6,7 @@ use std::rc::Rc;
 use rustc_serialize::{Decodable, Decoder, json};
 
 use animation::{AnimationClip, AnimationClipDef, DifferenceClipDef};
+use transform::Transform;
 use controller::AnimationControllerDef;
 
 /// A collection of asset definitions, to be loaded from a JSON definition file
@@ -19,14 +20,14 @@ pub struct AssetDefs {
 ///
 /// Asset manager - manages memory for loaded assets...?
 ///
-pub struct AssetManager {
-    pub animation_clips: HashMap<String, Rc<AnimationClip>>,
+pub struct AssetManager<T: Transform> {
+    pub animation_clips: HashMap<String, Rc<AnimationClip<T>>>,
     pub controller_defs: HashMap<String, AnimationControllerDef>
 }
 
-impl AssetManager {
+impl<T: Transform> AssetManager<T> {
 
-    pub fn new() -> AssetManager {
+    pub fn new() -> AssetManager<T> {
         AssetManager {
             animation_clips: HashMap::new(),
             controller_defs: HashMap::new(),
@@ -35,7 +36,7 @@ impl AssetManager {
 
     pub fn load_assets(&mut self, path: &str) {
 
-        let asset_defs: AssetDefs = AssetManager::load_def_from_path(path).unwrap();
+        let asset_defs: AssetDefs = AssetManager::<T>::load_def_from_path(path).unwrap();
 
         if let Some(animation_clips) = asset_defs.animation_clips {
             for clip_def in animation_clips.iter() {
@@ -64,8 +65,8 @@ impl AssetManager {
         }
     }
 
-    pub fn load_def_from_path<T>(path: &str) -> Result<T, &'static str>
-        where T: Decodable
+    pub fn load_def_from_path<D>(path: &str) -> Result<D, &'static str>
+        where D: Decodable
     {
         let file_result = File::open(path);
 

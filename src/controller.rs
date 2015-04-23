@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use rustc_serialize::{Decodable, Decoder};
-use interpolation;
 
 use animation::AnimationClip;
 use transform::Transform;
@@ -14,11 +13,11 @@ const MAX_JOINTS: usize = 64;
 
 /// A state that an AnimationController can be in, consisting
 /// of a blend tree and a collection of transitions to other states
-pub struct AnimationState {
+pub struct AnimationState<T: Transform> {
 
     /// The blend tree used to determine the final blended pose
     /// for this state
-    pub blend_tree: BlendTreeNode,
+    pub blend_tree: BlendTreeNode<T>,
 
     /// Transitions from this state to other AnimationStates
     pub transitions: Vec<AnimationTransition>,
@@ -158,7 +157,7 @@ impl Decodable for AnimationStateDef {
 /// A runtime representation of an Animation State Machine, consisting of one or more
 /// AnimationStates connected by AnimationTransitions, where the output animation
 /// pose depends on the current state or any active transitions between states.
-pub struct AnimationController {
+pub struct AnimationController<T: Transform> {
 
     /// Parameters that will be referenced by blend tree nodes and animation states
     parameters: HashMap<String, f32>,
@@ -173,7 +172,7 @@ pub struct AnimationController {
     playback_speed: f64,
 
     /// Mapping of all animation state names to their instances
-    states: HashMap<String, AnimationState>,
+    states: HashMap<String, AnimationState<T>>,
 
     /// The name of the current active AnimationState
     current_state: String,
@@ -184,11 +183,11 @@ pub struct AnimationController {
 
 
 
-impl AnimationController {
+impl<T: Transform> AnimationController<T> {
 
     /// Create an AnimationController instance from its definition, the desired skeleton, and a
     /// collection of currently loaded animation clips.
-    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip>>) -> AnimationController {
+    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip<T>>>) -> AnimationController<T> {
 
         let mut parameters = HashMap::new();
 
@@ -273,11 +272,7 @@ impl AnimationController {
 
         let elapsed_time = self.local_clock + ext_dt * self.playback_speed;
 
-        let mut local_poses = [ Transform {
-            translation: [0.0, 0.0, 0.0],
-            scale: 0.0,
-            rotation: (0.0, [0.0, 0.0, 0.0])
-        }; MAX_JOINTS ];
+        let mut local_poses = [ T::identity(); MAX_JOINTS ];
 
         {
             let current_state = self.states.get_mut(&self.current_state[..]).unwrap();
@@ -291,11 +286,7 @@ impl AnimationController {
 
             // Blend with the target state ...
 
-            let mut target_poses = [ Transform {
-                translation: [0.0, 0.0, 0.0],
-                scale: 0.0,
-                rotation: (0.0, [0.0, 0.0, 0.0])
-            }; MAX_JOINTS ];
+            let mut target_poses = [ T::identity(); MAX_JOINTS ];
 
             let target_state = self.states.get_mut(&transition.target_state[..]).unwrap();
 
@@ -306,9 +297,7 @@ impl AnimationController {
             for i in (0 .. output_poses.len()) {
                 let pose_1 = &mut local_poses[i];
                 let pose_2 = target_poses[i];
-                pose_1.scale = interpolation::lerp(&pose_1.scale, &pose_2.scale, &blend_parameter);
-                pose_1.translation = interpolation::lerp(&pose_1.translation, &pose_2.translation, &blend_parameter);
-                pose_1.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_parameter);
+                *pose_1 = pose_1.lerp(pose_2, blend_parameter);
             }
 
         }
@@ -319,7 +308,7 @@ impl AnimationController {
     /// Calculate global poses from the controller's skeleton and the given local poses
     fn calculate_global_poses(
         &self,
-        local_poses: &[Transform],
+        local_poses: &[T],
         global_poses: &mut [Matrix4<f32>],
     ) {
 
@@ -332,14 +321,7 @@ impl AnimationController {
             };
 
             let local_pose = &local_poses[joint_index];
-
-            let mut local_pose_matrix = quaternion_to_matrix(local_pose.rotation);
-
-            local_pose_matrix[0][3] = local_pose.translation[0];
-            local_pose_matrix[1][3] = local_pose.translation[1];
-            local_pose_matrix[2][3] = local_pose.translation[2];
-
-            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose_matrix);
+            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose.to_matrix());
         }
     }
 }

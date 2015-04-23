@@ -15,6 +15,8 @@ pub use quaternion::mul as quaternion_mul;
 pub use quaternion::conj as quaternion_conj;
 pub use quaternion::Quaternion;
 
+pub use dual_quaternion::{self, DualQuaternion};
+
 pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor: &f32) -> Quaternion<f32> {
 
     let dot = q1.0 * q2.0 + q1.1[0] * q2.1[0] + q1.1[1] * q2.1[1] + q1.1[2] * q2.1[2];
@@ -29,6 +31,17 @@ pub fn lerp_quaternion(q1: &Quaternion<f32>, q2: &Quaternion<f32>, blend_factor:
 
     let inv_sqrt_len = inv_sqrt(w * w + x * x + y * y + z * z);
     (w * inv_sqrt_len, [x  * inv_sqrt_len, y  * inv_sqrt_len, z  * inv_sqrt_len])
+}
+
+/// Dual-quaternion linear blending. See http://dcgi.felk.cvut.cz/home/zara/papers/TCD-CS-2006-46.pdf
+pub fn lerp_dual_quaternion(q1: DualQuaternion<f32>, q2: DualQuaternion<f32>, blend_factor: f32) -> DualQuaternion<f32> {
+    let dot = dual_quaternion::dot(q1, q2);
+
+    let s = 1.0 - blend_factor;
+    let t: f32 = if dot > 0.0 { blend_factor } else { -blend_factor };
+
+    let blended_sum = dual_quaternion::add(dual_quaternion::scale(q1, s), dual_quaternion::scale(q2, t));
+    dual_quaternion::normalize(blended_sum)
 }
 
 /// rotation matrix for `a` radians about z

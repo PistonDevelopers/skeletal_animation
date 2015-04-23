@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::rc::Rc;
 
 use collada::document::ColladaDocument;
 use collada;
@@ -77,6 +78,11 @@ impl AnimationClip {
     /// Overrides the sampling rate of the clip to give the given duration (in seconds).
     pub fn set_duration(&mut self, duration: f32) {
         self.samples_per_second = self.samples.len() as f32 / duration;
+    }
+
+    /// Return the duration of the clip in seconds
+    pub fn get_duration(&self) -> f32 {
+        self.samples.len() as f32 / self.samples_per_second
     }
 
     /// Obtains the interpolated skeletal pose at the given sampling time.
@@ -220,4 +226,53 @@ impl AnimationClip {
         }
     }
 
+}
+
+/// An instance of an AnimationClip which tracks playback parameters
+pub struct ClipInstance {
+    /// Shared clip reference
+    pub clip: Rc<AnimationClip>,
+
+    /// Controller clock time at animation start
+    pub start_time: f32,
+
+    /// Playback rate modifier, where 1.0 is original speed
+    pub playback_rate: f32,
+
+    /// Used to account for changes in playback rate
+    pub time_offset: f32,
+}
+
+impl ClipInstance {
+
+    pub fn new(clip: Rc<AnimationClip>) -> ClipInstance {
+        ClipInstance {
+            clip: clip,
+            start_time: 0.0,
+            playback_rate: 1.0,
+            time_offset: 0.0,
+        }
+    }
+
+    /// Adjust the playback rate of the clip without affecting the
+    /// value of get_local_time for a given global time.
+    pub fn set_playback_rate(&mut self, global_time: f32, new_rate: f32) {
+        if self.playback_rate != new_rate {
+            let local_time = self.get_local_time(global_time);
+            self.time_offset = local_time - (global_time - self.start_time) * new_rate;
+            self.playback_rate = new_rate;
+        }
+    }
+
+    pub fn get_pose_at_time(&self, global_time: f32, blended_poses: &mut [Transform]) {
+        self.clip.get_pose_at_time(self.get_local_time(global_time), blended_poses);
+    }
+
+    pub fn get_duration(&self) -> f32 {
+        self.clip.get_duration()
+    }
+
+    fn get_local_time(&self, global_time: f32) -> f32 {
+        (global_time - self.start_time) * self.playback_rate + self.time_offset
+    }
 }

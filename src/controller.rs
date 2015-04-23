@@ -273,15 +273,16 @@ impl AnimationController {
 
         let elapsed_time = self.local_clock + ext_dt * self.playback_speed;
 
-        let current_state = &self.states[&self.current_state[..]];
-
         let mut local_poses = [ Transform {
             translation: [0.0, 0.0, 0.0],
             scale: 0.0,
             rotation: (0.0, [0.0, 0.0, 0.0])
         }; MAX_JOINTS ];
 
-        current_state.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut local_poses[..]);
+        {
+            let current_state = self.states.get_mut(&self.current_state[..]).unwrap();
+            current_state.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut local_poses[..]);
+        }
 
         // TODO - would be kinda cool if you could just use a lerp node that pointed to the two
         // blend trees, but then we'd need RC pointers?
@@ -296,7 +297,7 @@ impl AnimationController {
                 rotation: (0.0, [0.0, 0.0, 0.0])
             }; MAX_JOINTS ];
 
-            let target_state = &self.states[&transition.target_state[..]];
+            let target_state = self.states.get_mut(&transition.target_state[..]).unwrap();
 
             target_state.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut target_poses[..]);
 

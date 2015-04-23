@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use rustc_serialize::{Decodable, Decoder};
 
-use animation::AnimationClip;
+use animation::{AnimationClip, ClipInstance};
+
 use transform::Transform;
 
 /// Identifier for an AnimationClip within a BlendTreeNodeDef
@@ -83,9 +84,10 @@ pub enum BlendTreeNode {
     /// the paramater value for name ParamId
     AdditiveNode(Box<BlendTreeNode>, Box<BlendTreeNode>, ParamId),
 
-    /// Pose output is from an AnimationClip
-    ClipNode(Rc<AnimationClip>),
+    /// Pose output is from an animation ClipInstance
+    ClipNode(ClipInstance),
 }
+
 
 impl BlendTreeNode {
 
@@ -121,10 +123,54 @@ impl BlendTreeNode {
 
             BlendTreeNodeDef::ClipNode(clip_id) => {
                 let clip = animations.get(&clip_id[..]).expect(&format!("Missing animation clip: {}", clip_id)[..]);
-                BlendTreeNode::ClipNode(clip.clone())
+                BlendTreeNode::ClipNode(ClipInstance::new(clip.clone()))
             }
         }
     }
+
+    /// Return the playback duration of the composite animation produced by this node and its subtree
+    pub fn get_playback_length(&self, params: &HashMap<String, f32>) -> f32 {
+        match self {
+            &BlendTreeNode::LerpNode(ref input_1, ref input_2, ref param_name) => {
+                let blend_parameter = params[&param_name[..]];
+                (1.0 - blend_parameter) * input_1.get_playback_length(params) + blend_parameter * input_2.get_playback_length(params)
+            }
+            &BlendTreeNode::AdditiveNode(ref input_1, ref _input_2, ref _param_name) => {
+                input_1.get_playback_length(params)
+            }
+            &BlendTreeNode::ClipNode(ref clip) => {
+                clip.get_duration()
+            }
+        }
+    }
+
+    /// Set the playback rate of the composite animation produced by this node and its subtree
+    ///
+    /// TODO - determine how / if we should handle setting the playback rate of a LerpNode / AdditiveNode
+    pub fn set_playback_rate(&mut self, global_time: f32, rate: f32) {
+        match self {
+            &mut BlendTreeNode::ClipNode(ref mut clip) => {
+                clip.set_playback_rate(global_time, rate);
+            }
+            _ => {}
+        }
+    }
+
+    /// Adjust playback rates of subtree blend nodes so that playback lengths match.
+    /// For blending looping animations with different durations.
+    pub fn synchronize_subtree(&mut self, global_time: f32, params: &HashMap<String, f32>) {
+        let target_length = self.get_playback_length(params);
+        match self {
+            &mut BlendTreeNode::LerpNode(ref mut input_1, ref mut input_2, ref _param_name) => {
+                let length_1 = input_1.get_playback_length(params);
+                let length_2 = input_2.get_playback_length(params);
+                input_1.set_playback_rate(global_time, length_1 / target_length);
+                input_2.set_playback_rate(global_time, length_2 / target_length);
+            }
+            _ => { }
+        }
+    }
+
 
     /// Get the output skeletal pose for this node and the given time and parameters
     ///
@@ -134,18 +180,22 @@ impl BlendTreeNode {
     /// * `params` - A mapping from ParamIds to their current parameter values
     /// * `output_poses` - The output array slice of joint transforms that will be populated
     ///                    according to the defined output for this BlendTreeNode
-    pub fn get_output_pose(&self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [Transform]) {
+    pub fn get_output_pose(&mut self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [Transform]) {
+
+        self.synchronize_subtree(time, params);
+
         match self {
-            &BlendTreeNode::LerpNode(ref input_1, ref input_2, ref param_name) => {
+            &mut BlendTreeNode::LerpNode(ref mut input_1, ref mut input_2, ref param_name) => {
 
                 let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
 
                 let sample_count = output_poses.len();
 
+                let blend_parameter = params[&param_name[..]];
+
                 input_1.get_output_pose(time, params, &mut input_poses[0 .. sample_count]);
                 input_2.get_output_pose(time, params, output_poses);
 
-                let blend_parameter = params[&param_name[..]];
 
                 for i in (0 .. output_poses.len()) {
                     let pose_1 = input_poses[i];
@@ -154,7 +204,7 @@ impl BlendTreeNode {
                 }
 
             }
-            &BlendTreeNode::AdditiveNode(ref input_1, ref input_2, ref param_name) => {
+            &mut BlendTreeNode::AdditiveNode(ref mut input_1, ref mut input_2, ref param_name) => {
 
                 let mut input_poses = [ Transform { translation: [0.0, 0.0, 0.0], scale: 0.0, rotation: (0.0, [0.0, 0.0, 0.0]) }; 64 ];
 
@@ -173,7 +223,7 @@ impl BlendTreeNode {
                 }
 
             }
-            &BlendTreeNode::ClipNode(ref clip) => {
+            &mut BlendTreeNode::ClipNode(ref clip) => {
                 clip.get_pose_at_time(time, output_poses);
             }
         }

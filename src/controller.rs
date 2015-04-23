@@ -197,10 +197,15 @@ impl<T: Transform> AnimationController<T> {
 
         let mut states = HashMap::new();
         for state_def in controller_def.states.iter() {
+
+            let mut blend_tree = BlendTreeNode::from_def(state_def.blend_tree.clone(), animations);
+            blend_tree.synchronize_subtree(0.0, &parameters);
+
             states.insert(state_def.name.clone(), AnimationState {
-                blend_tree: BlendTreeNode::from_def(state_def.blend_tree.clone(), animations),
+                blend_tree: blend_tree,
                 transitions: state_def.transitions.clone()
             });
+
         }
 
         AnimationController {

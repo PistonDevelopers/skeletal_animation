@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use collada::document::ColladaDocument;
 use collada;
-use interpolation::{self, Spatial};
 
 use math::*;
 use skeleton::Skeleton;
@@ -12,21 +11,21 @@ use transform::Transform;
 
 /// A single skeletal pose
 #[derive(Debug)]
-pub struct AnimationSample
+pub struct AnimationSample<T: Transform>
 {
 
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
-    pub local_poses: Vec<Transform>,
+    pub local_poses: Vec<T>,
 
 }
 
 /// A sequence of skeletal pose samples at some sample rate
 #[derive(Debug)]
-pub struct AnimationClip {
+pub struct AnimationClip<T: Transform> {
 
     /// The sequence of skeletal poses
-    pub samples: Vec<AnimationSample>,
+    pub samples: Vec<AnimationSample<T>>,
 
     /// Sample rate for the clip. Assumes a constant sample rate.
     pub samples_per_second: f32,
@@ -48,9 +47,9 @@ pub struct DifferenceClipDef {
     pub reference_clip: String,
 }
 
-impl AnimationClip {
+impl<T: Transform> AnimationClip<T> {
 
-    pub fn from_def(clip_def: &AnimationClipDef) -> AnimationClip {
+    pub fn from_def(clip_def: &AnimationClipDef) -> AnimationClip<T> {
 
         // Wacky. Shouldn't it be an error if the struct field isn't present?
         // FIXME - use an Option
@@ -92,7 +91,7 @@ impl AnimationClip {
     /// * `time` - The time to sample with, relative to the start of the animation
     /// * `blended_poses` - The output array slice of joint transforms that will be populated
     ///                     for each joint in the skeleton.
-    pub fn get_pose_at_time(&self, elapsed_time: f32, blended_poses: &mut [Transform]) {
+    pub fn get_pose_at_time(&self, elapsed_time: f32, blended_poses: &mut [T]) {
 
         let interpolated_index = elapsed_time * self.samples_per_second;
 
@@ -110,20 +109,17 @@ impl AnimationClip {
 
         for i in (0 .. sample_1.local_poses.len()) {
 
-            let pose_1 = &sample_1.local_poses[i];
-            let pose_2 = &sample_2.local_poses[i];
+            let pose_1 = sample_1.local_poses[i];
+            let pose_2 = sample_2.local_poses[i];
 
             let blended_pose = &mut blended_poses[i];
-            blended_pose.scale = interpolation::lerp(&pose_1.scale, &pose_2.scale, &blend_factor);
-            blended_pose.translation = interpolation::lerp(&pose_1.translation, &pose_2.translation, &blend_factor);
-            blended_pose.rotation = lerp_quaternion(&pose_1.rotation, &pose_2.rotation, &blend_factor);
-
+            *blended_pose = pose_1.lerp(pose_2, blend_factor);
         }
 
     }
 
     /// Create a difference clip from a source and reference clip for additive blending.
-    pub fn as_difference_clip(source_clip: &AnimationClip, reference_clip: &AnimationClip) -> AnimationClip {
+    pub fn as_difference_clip(source_clip: &AnimationClip<T>, reference_clip: &AnimationClip<T>) -> AnimationClip<T> {
 
         let samples = (0 .. source_clip.samples.len()).map(|sample_index| {
 
@@ -134,8 +130,8 @@ impl AnimationClip {
 
             let difference_poses = (0 .. source_sample.local_poses.len()).map(|joint_index| {
                 let ref source_pose = source_sample.local_poses[joint_index];
-                let ref reference_pose = reference_sample.local_poses[joint_index];
-                source_pose.subtract(reference_pose.clone())
+                let reference_pose = reference_sample.local_poses[joint_index];
+                source_pose.subtract(reference_pose)
             }).collect();
 
             AnimationSample {
@@ -160,7 +156,7 @@ impl AnimationClip {
     /// * `transform` - An offset transform to apply to the root pose of each animation sample,
     ///                 useful for applying rotation, translation, or scaling when loading an
     ///                 animation.
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip {
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip<T> {
         use std::f32::consts::PI;
 
         // Z-axis is 'up' in COLLADA, so need to rotate root pose about x-axis so y-axis is 'up'
@@ -203,16 +199,8 @@ impl AnimationClip {
             }).collect();
 
             // Convert local poses to Transforms (for interpolation)
-            let local_poses: Vec<Transform> = local_poses.iter().map(|pose_matrix| {
-                Transform {
-                    translation: [
-                        pose_matrix[0][3],
-                        pose_matrix[1][3],
-                        pose_matrix[2][3],
-                    ],
-                    scale: 1.0, // TODO don't assume?
-                    rotation: matrix_to_quaternion(pose_matrix),
-                }
+            let local_poses: Vec<T> = local_poses.iter().map(|pose_matrix| {
+                T::from_matrix(*pose_matrix)
             }).collect();
 
             AnimationSample {
@@ -229,9 +217,9 @@ impl AnimationClip {
 }
 
 /// An instance of an AnimationClip which tracks playback parameters
-pub struct ClipInstance {
+pub struct ClipInstance<T: Transform> {
     /// Shared clip reference
-    pub clip: Rc<AnimationClip>,
+    pub clip: Rc<AnimationClip<T>>,
 
     /// Controller clock time at animation start
     pub start_time: f32,
@@ -243,9 +231,9 @@ pub struct ClipInstance {
     pub time_offset: f32,
 }
 
-impl ClipInstance {
+impl<T: Transform> ClipInstance<T> {
 
-    pub fn new(clip: Rc<AnimationClip>) -> ClipInstance {
+    pub fn new(clip: Rc<AnimationClip<T>>) -> ClipInstance<T> {
         ClipInstance {
             clip: clip,
             start_time: 0.0,
@@ -264,7 +252,7 @@ impl ClipInstance {
         }
     }
 
-    pub fn get_pose_at_time(&self, global_time: f32, blended_poses: &mut [Transform]) {
+    pub fn get_pose_at_time(&self, global_time: f32, blended_poses: &mut [T]) {
         self.clip.get_pose_at_time(self.get_local_time(global_time), blended_poses);
     }
 

@@ -19,6 +19,9 @@ git = "https://github.com/PistonDevelopers/vecmath"
 [dependencies.quaternion]
 git = "https://github.com/PistonDevelopers/quaternion"
 
+[dependencies.dual_quaternion]
+git = "https://github.com/PistonDevelopers/dual_quaternion"
+
 [dependencies.gfx]
 git = "https://github.com/gfx-rs/gfx-rs"
 

@@ -8,33 +8,88 @@ use gfx_texture;
 
 use math::*;
 use skeleton::Skeleton;
+use transform::Transform;
 
 const MAX_JOINTS: usize = 64;
 
-pub struct SkinnedRenderBatch<R: gfx::Resources> {
-    skinning_transforms_buffer: gfx::BufferHandle<R, [[f32; 4]; 4]>,
+pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
+    skinning_transforms_buffer: gfx::BufferHandle<R, T>,
     batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
 }
 
-pub struct SkinnedRenderer<R: gfx::Resources> {
+pub struct SkinnedRenderer<R: gfx::Resources, T: Transform> {
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
-    render_batches: Vec<SkinnedRenderBatch<R>>,
+    render_batches: Vec<SkinnedRenderBatch<R, T>>,
     context: gfx::render::batch::Context<R>,
 }
 
-impl<R: gfx::Resources> SkinnedRenderer<R> {
+pub trait HasShaderSources<'a> {
+    fn vertex_shader_source() -> gfx::ShaderSource<'a>;
+    fn fragment_shader_source() -> gfx::ShaderSource<'a>;
+}
+
+impl<'a> HasShaderSources<'a> for Matrix4<f32> {
+    fn vertex_shader_source() -> gfx::ShaderSource<'a> {
+        gfx::ShaderSource {
+            glsl_150: Some(include_bytes!("skinning_150.glslv")),
+            .. gfx::ShaderSource::empty()
+        }
+    }
+    fn fragment_shader_source() -> gfx::ShaderSource<'a> {
+        gfx::ShaderSource {
+            glsl_150: Some(include_bytes!("skinning_150.glslf")),
+            .. gfx::ShaderSource::empty()
+        }
+    }
+}
+
+impl<'a> HasShaderSources<'a> for DualQuaternion<f32> {
+    fn vertex_shader_source() -> gfx::ShaderSource<'a> {
+        gfx::ShaderSource {
+            glsl_150: Some(include_bytes!("dq_skinning_150.glslv")),
+            .. gfx::ShaderSource::empty()
+        }
+    }
+    fn fragment_shader_source() -> gfx::ShaderSource<'a> {
+        gfx::ShaderSource {
+            glsl_150: Some(include_bytes!("skinning_150.glslf")),
+            .. gfx::ShaderSource::empty()
+        }
+    }
+}
+
+impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, T> {
+
+    pub fn from_collada_with_canvas<
+        C: gfx::CommandBuffer<R>,
+        F: gfx::Factory<R>,
+        O: gfx::render::target::Output<R>,
+        D: Device<Resources = R, CommandBuffer = C>,
+    >(
+        canvas: &mut gfx::Canvas<O, D, F>,
+        collada_document: collada::document::ColladaDocument,
+        texture_paths: Vec<&str>,
+    ) -> Result<SkinnedRenderer<R, T>, gfx::ProgramError> {
+        SkinnedRenderer::from_collada(&mut canvas.factory, &canvas.device, collada_document, texture_paths)
+    }
 
     pub fn from_collada<
         F: gfx::Factory<R>,
+        D: gfx::Device,
     > (
         factory: &mut F,
+        device: &D,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
-    ) -> Result<SkinnedRenderer<R>, gfx::ProgramError> {
+    ) -> Result<SkinnedRenderer<R, T>, gfx::ProgramError> {
 
-        let program = match factory.link_program(SKINNED_VERTEX_SHADER.clone(), SKINNED_FRAGMENT_SHADER.clone()) {
-            Ok(program_handle) => program_handle,
-            Err(e) => return Err(e),
+        let program = {
+            let vs = T::vertex_shader_source();
+            let fs = T::fragment_shader_source();
+            match factory.link_program_source(vs, fs, device.get_capabilities()) {
+                Ok(program_handle) => program_handle,
+                Err(e) => return Err(e),
+            }
         };
 
         let obj_set = collada_document.get_obj_set().unwrap();
@@ -51,7 +106,6 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
             let mut index_data: Vec<u32> = Vec::new();
 
-
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
             let mesh = factory.create_mesh(vertex_data.as_slice());
@@ -62,7 +116,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
                 .create_buffer_index::<u32>(index_data.as_slice())
                 .to_slice(gfx::PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = factory.create_buffer::<[[f32; 4]; 4]>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
+            let skinning_transforms_buffer = factory.create_buffer::<T>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
 
             let texture = gfx_texture::Texture::from_path(
                 factory,
@@ -110,7 +164,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         canvas: &mut gfx::Canvas<O, D, F>,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        joint_poses: &[Matrix4<f32>]
+        joint_poses: &[T]
     ) {
         self.render(&mut canvas.renderer, &mut canvas.factory, &canvas.output, view, projection, joint_poses);
     }
@@ -126,7 +180,7 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
         output: &O,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
-        joint_poses: &[Matrix4<f32>]
+        joint_poses: &[T]
     ) {
 
         let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
@@ -145,9 +199,10 @@ impl<R: gfx::Resources> SkinnedRenderer<R> {
     ///
     /// TODO - don't allocate a new vector
     ///
-    pub fn calculate_skinning_transforms(&self, global_poses: &[Matrix4<f32>]) -> Vec<Matrix4<f32>> {
+    pub fn calculate_skinning_transforms(&self, global_poses: &[T]) -> Vec<T> {
         self.skeleton.joints.iter().enumerate().map(|(i, joint)| {
-            row_mat4_mul(global_poses[i], joint.inverse_bind_pose)
+            // TODO avoid conversion...
+            global_poses[i].concat(T::from_matrix(joint.inverse_bind_pose))
         }).collect()
     }
 }
@@ -183,76 +238,6 @@ impl Default for SkinnedVertex {
         }
     }
 }
-
-static SKINNED_VERTEX_SHADER: &'static [u8] = b"
-    #version 150 core
-
-    uniform mat4 u_model_view_proj;
-    uniform mat4 u_model_view;
-
-    const int MAX_JOINTS = 64;
-
-    uniform u_skinning_transforms {
-        mat4 skinning_transforms[MAX_JOINTS];
-    };
-
-    in vec3 pos, normal;
-    in vec2 uv;
-
-    in ivec4 joint_indices;
-    in vec4 joint_weights;
-
-    out vec3 v_normal;
-    out vec2 v_TexCoord;
-
-    void main() {
-        v_TexCoord = vec2(uv.x, 1 - uv.y); // this feels like a bug with gfx?
-
-        vec4 adjustedVertex;
-        vec4 adjustedNormal;
-
-        vec4 bindPoseVertex = vec4(pos, 1.0);
-        vec4 bindPoseNormal = vec4(normal, 0.0);
-
-        adjustedVertex = bindPoseVertex * skinning_transforms[joint_indices.x] * joint_weights.x;
-        adjustedNormal = bindPoseNormal * skinning_transforms[joint_indices.x] * joint_weights.x;
-
-        adjustedVertex = adjustedVertex + bindPoseVertex * skinning_transforms[joint_indices.y] * joint_weights.y;
-        adjustedNormal = adjustedNormal + bindPoseNormal * skinning_transforms[joint_indices.y] * joint_weights.y;
-
-        adjustedVertex = adjustedVertex + bindPoseVertex * skinning_transforms[joint_indices.z] * joint_weights.z;
-        adjustedNormal = adjustedNormal + bindPoseNormal * skinning_transforms[joint_indices.z] * joint_weights.z;
-
-        // TODO just use remainder for this weight?
-        adjustedVertex = adjustedVertex + bindPoseVertex * skinning_transforms[joint_indices.a] * joint_weights.a;
-        adjustedNormal = adjustedNormal + bindPoseNormal * skinning_transforms[joint_indices.a] * joint_weights.a;
-
-        gl_Position = u_model_view_proj * adjustedVertex;
-        v_normal = normalize(u_model_view * adjustedNormal).xyz;
-    }
-";
-
-static SKINNED_FRAGMENT_SHADER: &'static [u8] = b"
-    #version 150
-
-    uniform sampler2D u_texture;
-
-    in vec3 v_normal;
-    out vec4 out_color;
-
-    in vec2 v_TexCoord;
-
-    void main() {
-        vec4 texColor = texture(u_texture, v_TexCoord);
-
-        // unidirectional light in direction as camera
-        vec3 light = vec3(0.0, 0.0, 1.0);
-        light = normalize(light);
-        float intensity = max(dot(v_normal, light), 0.0);
-
-        out_color = vec4(intensity, intensity, intensity, 1.0) * texColor;
-    }
-";
 
 fn vtn_to_vertex(a: collada::VTNIndex, obj: &collada::Object) -> SkinnedVertex
 {

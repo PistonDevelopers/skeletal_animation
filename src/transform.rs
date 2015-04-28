@@ -104,12 +104,6 @@ impl Transform for DualQuaternion<f32> {
     }
 
     fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32> {
-        // TODO - get this working properly!
-        // let v = dual_quaternion::from_rotation_and_translation(quaternion::id(), v);
-        // let v_prime = dual_quaternion::mul(dual_quaternion::mul(self, v),
-        //                                    dual_quaternion::conj(self));
-        // dual_quaternion::get_translation(v_prime)
-
         let t = dual_quaternion::get_translation(self);
         let r = dual_quaternion::get_rotation(self);
         vec3_add(quaternion::rotate_vector(r, v), t)

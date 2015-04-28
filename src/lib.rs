@@ -49,4 +49,4 @@ pub use manager::{
 
 pub use controller::AnimationController;
 
-pub use skinned_renderer::SkinnedRenderer;
+pub use skinned_renderer::{SkinnedRenderer, HasShaderSources};

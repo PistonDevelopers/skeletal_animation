@@ -131,7 +131,7 @@ impl<T: Transform> AnimationClip<T> {
             let difference_poses = (0 .. source_sample.local_poses.len()).map(|joint_index| {
                 let ref source_pose = source_sample.local_poses[joint_index];
                 let reference_pose = reference_sample.local_poses[joint_index];
-                source_pose.subtract(reference_pose)
+                source_pose.inverse().concat(reference_pose)
             }).collect();
 
             AnimationSample {

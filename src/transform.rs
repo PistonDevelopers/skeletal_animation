@@ -3,9 +3,10 @@ use math::*;
 
 pub trait Transform: Copy {
     fn identity() -> Self;
-    fn add(self, other: Self) -> Self;
-    fn subtract(self, other: Self) -> Self;
+    fn concat(self, other: Self) -> Self;
+    fn inverse(self) -> Self;
     fn lerp(self, other: Self, parameter: f32) -> Self;
+    fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32>;
     fn to_matrix(self) -> Matrix4<f32>;
     fn from_matrix(Matrix4<f32>) -> Self;
 }
@@ -35,20 +36,12 @@ impl Transform for QVTransform {
         }
     }
 
-    fn add(self, other: QVTransform) -> QVTransform {
-        QVTransform {
-            translation: vec3_add(self.translation, other.translation),
-            scale: self.scale + other.scale,
-            rotation: quaternion_mul(self.rotation, other.rotation),
-        }
+    fn concat(self, other: QVTransform) -> QVTransform {
+        QVTransform::from_matrix(self.to_matrix().concat(other.to_matrix()))
     }
 
-    fn subtract(self, other: QVTransform) -> QVTransform {
-        QVTransform {
-            translation: vec3_sub(self.translation, other.translation),
-            scale: self.scale - other.scale,
-            rotation: quaternion_mul(self.rotation, quaternion_conj(other.rotation)),
-        }
+    fn inverse(self) -> QVTransform {
+        QVTransform::from_matrix(self.to_matrix().inverse())
     }
 
     fn lerp(self, other: QVTransform, parameter: f32) -> QVTransform {
@@ -57,6 +50,12 @@ impl Transform for QVTransform {
             scale: interpolation::lerp(&self.scale, &other.scale, &parameter),
             rotation: lerp_quaternion(&self.rotation, &other.rotation, &parameter),
         }
+    }
+
+    fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32> {
+        let v = quaternion::rotate_vector(self.rotation, v);
+        let v = vec3_add(v, self.translation);
+        vec3_scale(v, self.scale)
     }
 
     fn to_matrix(self) -> Matrix4<f32> {
@@ -92,16 +91,28 @@ impl Transform for DualQuaternion<f32> {
         dual_quaternion::id()
     }
 
-    fn add(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
+    fn concat(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
         dual_quaternion::mul(self, other)
     }
 
-    fn subtract(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
-        dual_quaternion::mul(self, dual_quaternion::conj(other))
+    fn inverse(self) -> DualQuaternion<f32> {
+        dual_quaternion::conj(self)
     }
 
     fn lerp(self, other: DualQuaternion<f32>, parameter: f32) -> DualQuaternion<f32> {
         lerp_dual_quaternion(self, other, parameter)
+    }
+
+    fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32> {
+        // TODO - get this working properly!
+        // let v = dual_quaternion::from_rotation_and_translation(quaternion::id(), v);
+        // let v_prime = dual_quaternion::mul(dual_quaternion::mul(self, v),
+        //                                    dual_quaternion::conj(self));
+        // dual_quaternion::get_translation(v_prime)
+
+        let t = dual_quaternion::get_translation(self);
+        let r = dual_quaternion::get_rotation(self);
+        vec3_add(quaternion::rotate_vector(r, v), t)
     }
 
     fn to_matrix(self) -> Matrix4<f32> {
@@ -120,7 +131,7 @@ impl Transform for DualQuaternion<f32> {
 
     fn from_matrix(m: Matrix4<f32>) -> DualQuaternion<f32> {
 
-        let rotation = matrix_to_quaternion(&m);
+        let rotation = matrix_to_quaternion(&mat4_transposed(m));
 
         let translation = [m[0][3],
                            m[1][3],
@@ -131,3 +142,32 @@ impl Transform for DualQuaternion<f32> {
     }
 }
 
+impl Transform for Matrix4<f32> {
+
+    fn identity() -> Matrix4<f32> {
+        mat4_id()
+    }
+
+    fn concat(self, other: Matrix4<f32>) -> Matrix4<f32> {
+        row_mat4_mul(self, other)
+    }
+
+    fn inverse(self) -> Matrix4<f32> {
+        mat4_inv(self)
+    }
+
+    fn lerp(self, other: Matrix4<f32>, parameter: f32) -> Matrix4<f32> {
+        let q1 = DualQuaternion::from_matrix(self);
+        let q2 = DualQuaternion::from_matrix(other);
+        q1.lerp(q2, parameter).to_matrix()
+    }
+
+    fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32> {
+        let t = row_mat4_transform(self, [v[0], v[1], v[2], 1.0]);
+        [t[0], t[1], t[2]]
+    }
+
+    fn to_matrix(self) -> Matrix4<f32> { self }
+
+    fn from_matrix(m: Matrix4<f32>) -> Matrix4<f32> { m }
+}

@@ -6,7 +6,6 @@ use rustc_serialize::{Decodable, Decoder};
 use animation::AnimationClip;
 use transform::Transform;
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
-use math::*;
 use skeleton::Skeleton;
 
 const MAX_JOINTS: usize = 64;
@@ -271,7 +270,7 @@ impl<T: Transform> AnimationController<T> {
     }
 
     /// Calculate global skeletal joint poses for the given time since last update
-    pub fn get_output_pose(&mut self, ext_dt: f64, output_poses: &mut [Matrix4<f32>]) {
+    pub fn get_output_pose(&mut self, ext_dt: f64, output_poses: &mut [T]) {
 
         self.update_state(ext_dt);
 
@@ -314,7 +313,7 @@ impl<T: Transform> AnimationController<T> {
     fn calculate_global_poses(
         &self,
         local_poses: &[T],
-        global_poses: &mut [Matrix4<f32>],
+        global_poses: &mut [T],
     ) {
 
         for (joint_index, joint) in self.skeleton.joints.iter().enumerate() {
@@ -322,11 +321,11 @@ impl<T: Transform> AnimationController<T> {
             let parent_pose = if !joint.is_root() {
                 global_poses[joint.parent_index as usize]
             } else {
-                mat4_id()
+                T::identity()
             };
 
-            let local_pose = &local_poses[joint_index];
-            global_poses[joint_index] = row_mat4_mul(parent_pose, local_pose.to_matrix());
+            let local_pose = local_poses[joint_index];
+            global_poses[joint_index] = parent_pose.concat(local_pose);
         }
     }
 }

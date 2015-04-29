@@ -31,7 +31,7 @@ pub use animation::{
     AnimationSample,
 };
 
-pub use transform::{Transform, QVTransform};
+pub use transform::{Transform, QVTransform, FromTransform};
 
 pub use skeleton::{
     Skeleton,
@@ -49,4 +49,4 @@ pub use manager::{
 
 pub use controller::AnimationController;
 
-pub use skinned_renderer::SkinnedRenderer;
+pub use skinned_renderer::{SkinnedRenderer, HasShaderSources};

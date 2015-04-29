@@ -5,15 +5,18 @@ pub use vecmath::{
     Matrix4,
     vec3_add,
     vec3_sub,
+    vec3_scale,
     row_mat4_mul,
     row_mat4_transform,
+    mat4_transposed,
+    mat4_inv,
     mat4_id,
 };
 
 pub use quaternion::id as quaternion_id;
 pub use quaternion::mul as quaternion_mul;
 pub use quaternion::conj as quaternion_conj;
-pub use quaternion::Quaternion;
+pub use quaternion::{self, Quaternion};
 
 pub use dual_quaternion::{self, DualQuaternion};
 

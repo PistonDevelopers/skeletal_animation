@@ -219,7 +219,7 @@ impl<T: Transform> BlendTreeNode<T> {
                     let pose_1 = input_poses[i];
                     let pose_2 = &mut output_poses[i];
                     let additive_pose = T::identity().lerp(pose_2.clone(), blend_parameter);
-                    (*pose_2) = pose_1.add(additive_pose);
+                    (*pose_2) = pose_1.concat(additive_pose);
                 }
 
             }

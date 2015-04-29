@@ -4,7 +4,7 @@ use std::rc::Rc;
 use rustc_serialize::{Decodable, Decoder};
 
 use animation::AnimationClip;
-use transform::Transform;
+use transform::{Transform, FromTransform};
 use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
 use skeleton::Skeleton;
 
@@ -270,7 +270,7 @@ impl<T: Transform> AnimationController<T> {
     }
 
     /// Calculate global skeletal joint poses for the given time since last update
-    pub fn get_output_pose(&mut self, ext_dt: f64, output_poses: &mut [T]) {
+    pub fn get_output_pose<TOutput: Transform + FromTransform<T>>(&mut self, ext_dt: f64, output_poses: &mut [TOutput]) {
 
         self.update_state(ext_dt);
 
@@ -310,10 +310,10 @@ impl<T: Transform> AnimationController<T> {
     }
 
     /// Calculate global poses from the controller's skeleton and the given local poses
-    fn calculate_global_poses(
+    fn calculate_global_poses<TOutput: Transform + FromTransform<T>>(
         &self,
         local_poses: &[T],
-        global_poses: &mut [T],
+        global_poses: &mut [TOutput],
     ) {
 
         for (joint_index, joint) in self.skeleton.joints.iter().enumerate() {
@@ -321,11 +321,11 @@ impl<T: Transform> AnimationController<T> {
             let parent_pose = if !joint.is_root() {
                 global_poses[joint.parent_index as usize]
             } else {
-                T::identity()
+                TOutput::identity()
             };
 
             let local_pose = local_poses[joint_index];
-            global_poses[joint_index] = parent_pose.concat(local_pose);
+            global_poses[joint_index] = parent_pose.concat(TOutput::from_transform(local_pose));
         }
     }
 }

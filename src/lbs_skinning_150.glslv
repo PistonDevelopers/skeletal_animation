@@ -1,5 +1,7 @@
 #version 150 core
 
+// Linear Blend Skinning
+
 uniform mat4 u_model_view_proj;
 uniform mat4 u_model_view;
 

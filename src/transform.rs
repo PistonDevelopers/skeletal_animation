@@ -165,3 +165,19 @@ impl Transform for Matrix4<f32> {
 
     fn from_matrix(m: Matrix4<f32>) -> Matrix4<f32> { m }
 }
+
+pub trait FromTransform<T: Transform> {
+    fn from_transform(t: T) -> Self;
+}
+
+impl FromTransform<DualQuaternion<f32>> for DualQuaternion<f32> {
+    fn from_transform(t: DualQuaternion<f32>) -> DualQuaternion<f32> {
+        t
+    }
+}
+
+impl FromTransform<QVTransform> for Matrix4<f32> {
+    fn from_transform(t: QVTransform) -> Matrix4<f32> {
+        t.to_matrix()
+    }
+}

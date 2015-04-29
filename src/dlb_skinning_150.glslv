@@ -1,6 +1,7 @@
 #version 150 core
 
-// Reference: http://www.seas.upenn.edu/~ladislav/dq/dqs.cg
+// Dual-Quaternion Linear Blend Skinning
+// Reference: http://www.seas.upenn.edu/~ladislav/kavan07skinning/kavan07skinning.pdf
 
 uniform mat4 u_model_view_proj;
 uniform mat4 u_model_view;
@@ -42,19 +43,31 @@ mat4 dualQuaternionToMatrix(vec4 qReal, vec4 qDual) {
 }
 
 void main() {
-    v_TexCoord = vec2(uv.x, 1 - uv.y); // wha?
+    v_TexCoord = vec2(uv.x, 1 - uv.y);
 
-    vec4 bindPoseVertex = vec4(pos, 1.0);
-    vec4 bindPoseNormal = vec4(normal, 0.0);
+    float wx = joint_weights.x;
+    float wy = joint_weights.y;
+    float wz = joint_weights.z;
+    float wa = joint_weights.a;
 
-    mat2x4 blendedSkinningDQ = skinning_transforms[joint_indices.x] * joint_weights.x;
-    blendedSkinningDQ += skinning_transforms[joint_indices.y] * joint_weights.y;
-    blendedSkinningDQ += skinning_transforms[joint_indices.z] * joint_weights.z;
-    blendedSkinningDQ += skinning_transforms[joint_indices.a] * joint_weights.a;
+    if (dot(skinning_transforms[joint_indices.x][0],
+            skinning_transforms[joint_indices.y][0]) < 0.0) { wy *= -1; }
 
-    blendedSkinningDQ /= length(blendedSkinningDQ[0]); // normalize??
+    if (dot(skinning_transforms[joint_indices.x][0],
+            skinning_transforms[joint_indices.z][0]) < 0.0) { wz *= -1; }
+
+    if (dot(skinning_transforms[joint_indices.x][0],
+            skinning_transforms[joint_indices.a][0]) < 0.0) { wa *= -1; }
+
+    mat2x4 blendedSkinningDQ = skinning_transforms[joint_indices.x] * wx;
+    blendedSkinningDQ += skinning_transforms[joint_indices.y] * wy;
+    blendedSkinningDQ += skinning_transforms[joint_indices.z] * wz;
+    blendedSkinningDQ += skinning_transforms[joint_indices.a] * wa;
+    blendedSkinningDQ /= length(blendedSkinningDQ[0]);
 
     mat4 blendedSkinningMatrix = dualQuaternionToMatrix(blendedSkinningDQ[0], blendedSkinningDQ[1]);
+    vec4 bindPoseVertex = vec4(pos, 1.0);
+    vec4 bindPoseNormal = vec4(normal, 0.0);
 
     vec4 adjustedVertex = bindPoseVertex * blendedSkinningMatrix;
     vec4 adjustedNormal = bindPoseNormal * blendedSkinningMatrix;

@@ -31,7 +31,7 @@ pub trait HasShaderSources<'a> {
 impl<'a> HasShaderSources<'a> for Matrix4<f32> {
     fn vertex_shader_source() -> gfx::ShaderSource<'a> {
         gfx::ShaderSource {
-            glsl_150: Some(include_bytes!("skinning_150.glslv")),
+            glsl_150: Some(include_bytes!("lbs_skinning_150.glslv")),
             .. gfx::ShaderSource::empty()
         }
     }
@@ -46,7 +46,7 @@ impl<'a> HasShaderSources<'a> for Matrix4<f32> {
 impl<'a> HasShaderSources<'a> for DualQuaternion<f32> {
     fn vertex_shader_source() -> gfx::ShaderSource<'a> {
         gfx::ShaderSource {
-            glsl_150: Some(include_bytes!("dq_skinning_150.glslv")),
+            glsl_150: Some(include_bytes!("dlb_skinning_150.glslv")),
             .. gfx::ShaderSource::empty()
         }
     }

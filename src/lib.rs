@@ -31,7 +31,7 @@ pub use animation::{
     AnimationSample,
 };
 
-pub use transform::{Transform, QVTransform};
+pub use transform::{Transform, QVTransform, FromTransform};
 
 pub use skeleton::{
     Skeleton,

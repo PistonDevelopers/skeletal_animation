@@ -23,7 +23,7 @@ out vec2 v_TexCoord;
 
 mat4 dualQuaternionToMatrix(vec4 qReal, vec4 qDual) {
 
-	mat4 M;
+	mat4 M = mat4(1.0);
 
 	float len2 = dot(qReal, qReal);
 	float w = qReal.x, x = qReal.y, y = qReal.z, z = qReal.w;

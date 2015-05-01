@@ -20,9 +20,9 @@ Animation assets, which currently include AnimationClips, DifferenceClips, and A
 
 ```json
 {
-    "animation_clips": [ ... ]
-    "difference_clips": [ ... ]
-    "animation_controllers": [ ... ]
+    "animation_clips": [],
+    "difference_clips": [],
+    "animation_controllers": []
 }
 ```
 
@@ -88,7 +88,9 @@ An example controller definition:
 
 ```json
 {
-    "animation_controllers: [{
+    "animation_controllers": [{
+    
+    	"name": "human-controller",
         "parameters": [
             "forward-speed",
             "forward-to-strafe",
@@ -221,7 +223,7 @@ let skinned_renderer = SkinnedRenderer::<_, Matrix4<f32>>::from_collada_with_can
 ).unwrap();
 
 // To use dual-quaternions with a Dual-Quaternion Linear Blend Skinning (DLB) shader
-let skinned_renderer = SkinnedRenderer::<_, Matrix4<f32>>::from_collada_with_canvas(
+let skinned_renderer = SkinnedRenderer::<_, DualQuaternion<f32>>::from_collada_with_canvas(
     canvas, // gfx::Canvas
 	collada_document, // the parsed Collada document for the rigged mesh
 	["assets/skin.png", "assets/hair.png", "assets/eyes.png"], // Textures for each submesh in the Collada source

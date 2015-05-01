@@ -286,4 +286,3 @@ impl<T: Transform> AnimNode<T> for ClipAnimNode<T> {
         self.clip.get_pose_at_time(time, output_poses);
     }
 }
-

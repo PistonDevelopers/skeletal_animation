@@ -13,8 +13,7 @@ pub type ClipId = String;
 /// Identifier for animation controller parameter, within a LerpNode
 pub type ParamId = String;
 
-/// Definition of a blend tree, to be converted to BlendTreeNode when used by an
-/// AnimationController
+/// Definition of a blend tree, used by AnimationController to construct an AnimBlendTree
 #[derive(Debug, Clone)]
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
@@ -71,27 +70,17 @@ impl Decodable for BlendTreeNodeDef {
     }
 }
 
-/// Runtime representation of a blend tree.
-pub enum BlendTreeNode<T: Transform> {
-
-    /// Pose output is linear blend between the output of
-    /// two child BlendTreeNodes, with blend factor according
-    /// the paramater value for name ParamId
-    LerpNode(Box<BlendTreeNode<T>>, Box<BlendTreeNode<T>>, ParamId),
-
-    /// Pose output is additive blend between the output of
-    /// two child BlendTreeNodes, with blend factor according
-    /// the paramater value for name ParamId
-    AdditiveNode(Box<BlendTreeNode<T>>, Box<BlendTreeNode<T>>, ParamId),
-
-    /// Pose output is from an animation ClipInstance
-    ClipNode(ClipInstance<T>),
+/// A tree of AnimNodes
+pub struct AnimBlendTree<T: Transform> {
+    root_node: AnimNodeHandle,
+    lerp_nodes: Vec<LerpAnimNode>,
+    additive_nodes: Vec<AdditiveAnimNode>,
+    clip_nodes: Vec<ClipAnimNode<T>>,
 }
 
+impl<T: Transform> AnimBlendTree<T> {
 
-impl<T: Transform> BlendTreeNode<T> {
-
-    /// Initialize a new BlendTreeNode from a BlendTreeNodeDef and
+    /// Initialize a new AnimBlendTree from the root BlendTreeNodeDef and
     /// a mapping from animation names to AnimationClip
     ///
     /// # Arguments
@@ -101,78 +90,20 @@ impl<T: Transform> BlendTreeNode<T> {
     pub fn from_def(
         def: BlendTreeNodeDef,
         animations: &HashMap<ClipId, Rc<AnimationClip<T>>>
-    ) -> BlendTreeNode<T> {
+    ) -> AnimBlendTree<T> {
 
-        match def {
+        let mut tree = AnimBlendTree {
+            root_node: AnimNodeHandle::None,
+            lerp_nodes: Vec::new(),
+            additive_nodes: Vec::new(),
+            clip_nodes: Vec::new(),
+        };
 
-            BlendTreeNodeDef::LerpNode(input_1, input_2, param_id) => {
-                BlendTreeNode::LerpNode(
-                    Box::new(BlendTreeNode::from_def(*input_1, animations)),
-                    Box::new(BlendTreeNode::from_def(*input_2, animations)),
-                    param_id.clone()
-                )
-            }
-
-            BlendTreeNodeDef::AdditiveNode(input_1, input_2, param_id) => {
-                BlendTreeNode::AdditiveNode(
-                    Box::new(BlendTreeNode::from_def(*input_1, animations)),
-                    Box::new(BlendTreeNode::from_def(*input_2, animations)),
-                    param_id.clone()
-                )
-            }
-
-            BlendTreeNodeDef::ClipNode(clip_id) => {
-                let clip = animations.get(&clip_id[..]).expect(&format!("Missing animation clip: {}", clip_id)[..]);
-                BlendTreeNode::ClipNode(ClipInstance::new(clip.clone()))
-            }
-        }
+        tree.root_node = tree.add_node(def, animations);
+        tree
     }
 
-    /// Return the playback duration of the composite animation produced by this node and its subtree
-    pub fn get_playback_length(&self, params: &HashMap<String, f32>) -> f32 {
-        match self {
-            &BlendTreeNode::LerpNode(ref input_1, ref input_2, ref param_name) => {
-                let blend_parameter = params[&param_name[..]];
-                (1.0 - blend_parameter) * input_1.get_playback_length(params) + blend_parameter * input_2.get_playback_length(params)
-            }
-            &BlendTreeNode::AdditiveNode(ref input_1, ref _input_2, ref _param_name) => {
-                input_1.get_playback_length(params)
-            }
-            &BlendTreeNode::ClipNode(ref clip) => {
-                clip.get_duration()
-            }
-        }
-    }
-
-    /// Set the playback rate of the composite animation produced by this node and its subtree
-    ///
-    /// TODO - determine how / if we should handle setting the playback rate of a LerpNode / AdditiveNode
-    pub fn set_playback_rate(&mut self, global_time: f32, rate: f32) {
-        match self {
-            &mut BlendTreeNode::ClipNode(ref mut clip) => {
-                clip.set_playback_rate(global_time, rate);
-            }
-            _ => {}
-        }
-    }
-
-    /// Adjust playback rates of subtree blend nodes so that playback lengths match.
-    /// For blending looping animations with different durations.
-    pub fn synchronize_subtree(&mut self, global_time: f32, params: &HashMap<String, f32>) {
-        let target_length = self.get_playback_length(params);
-        match self {
-            &mut BlendTreeNode::LerpNode(ref mut input_1, ref mut input_2, ref _param_name) => {
-                let length_1 = input_1.get_playback_length(params);
-                let length_2 = input_2.get_playback_length(params);
-                input_1.set_playback_rate(global_time, length_1 / target_length);
-                input_2.set_playback_rate(global_time, length_2 / target_length);
-            }
-            _ => { }
-        }
-    }
-
-
-    /// Get the output skeletal pose for this node and the given time and parameters
+    /// Get the output skeletal pose from the blend tree for the given time and parameters
     ///
     /// # Arguments
     ///
@@ -180,52 +111,179 @@ impl<T: Transform> BlendTreeNode<T> {
     /// * `params` - A mapping from ParamIds to their current parameter values
     /// * `output_poses` - The output array slice of joint transforms that will be populated
     ///                    according to the defined output for this BlendTreeNode
-    pub fn get_output_pose(&mut self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
+    pub fn get_output_pose(&self, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
+        if let Some(ref node) = self.get_node(self.root_node.clone()) {
+            node.get_output_pose(self, time, params, output_poses);
+        }
+    }
 
-        self.synchronize_subtree(time, params);
+    /// For each LerpNode with two animation clips, synchronize their playback rates according to the blend parameter
+    ///
+    /// # Arguments
+    ///
+    /// * `global_time` - The current global clock time from the controller
+    /// * `params` - A mapping from ParamIds to their current parameter values
+    pub fn synchronize(&mut self, global_time: f32, params: &HashMap<String, f32>) {
+        for lerp_node in self.lerp_nodes.iter() {
+            if let (AnimNodeHandle::ClipAnimNodeHandle(clip_1), AnimNodeHandle::ClipAnimNodeHandle(clip_2)) = (lerp_node.input_1.clone(), lerp_node.input_2.clone()) {
+                let blend_parameter = params[&lerp_node.blend_param[..]];
 
-        match self {
-            &mut BlendTreeNode::LerpNode(ref mut input_1, ref mut input_2, ref param_name) => {
+                let target_length = {
+                    let clip_1 = &self.clip_nodes[clip_1].clip;
+                    let clip_2 = &self.clip_nodes[clip_2].clip;
 
-                let mut input_poses = [ T::identity(); 64 ];
+                    let length_1 = clip_1.get_duration();
+                    let length_2 = clip_2.get_duration();
 
-                let sample_count = output_poses.len();
+                    (1.0 - blend_parameter) * length_1 + blend_parameter * length_2
+                };
 
-                let blend_parameter = params[&param_name[..]];
-
-                input_1.get_output_pose(time, params, &mut input_poses[0 .. sample_count]);
-                input_2.get_output_pose(time, params, output_poses);
-
-
-                for i in (0 .. output_poses.len()) {
-                    let pose_1 = input_poses[i];
-                    let pose_2 = &mut output_poses[i];
-                    (*pose_2) = pose_1.lerp(pose_2.clone(), blend_parameter);
+                {
+                    let clip_1 = &mut self.clip_nodes[clip_1].clip;
+                    let length = clip_1.get_duration();
+                    clip_1.set_playback_rate(global_time, length / target_length);
                 }
 
-            }
-            &mut BlendTreeNode::AdditiveNode(ref mut input_1, ref mut input_2, ref param_name) => {
-
-                let mut input_poses = [ T::identity(); 64 ];
-
-                let sample_count = output_poses.len();
-
-                input_1.get_output_pose(time, params, &mut input_poses[0 .. sample_count]);
-                input_2.get_output_pose(time, params, output_poses);
-
-                let blend_parameter = params[&param_name[..]];
-
-                for i in (0 .. output_poses.len()) {
-                    let pose_1 = input_poses[i];
-                    let pose_2 = &mut output_poses[i];
-                    let additive_pose = T::identity().lerp(pose_2.clone(), blend_parameter);
-                    (*pose_2) = pose_1.concat(additive_pose);
+                {
+                    let clip_2 = &mut self.clip_nodes[clip_2].clip;
+                    let length = clip_2.get_duration();
+                    clip_2.set_playback_rate(global_time, length / target_length);
                 }
-
-            }
-            &mut BlendTreeNode::ClipNode(ref clip) => {
-                clip.get_pose_at_time(time, output_poses);
             }
         }
     }
+
+    fn add_node(
+        &mut self,
+        def: BlendTreeNodeDef,
+        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>
+    ) -> AnimNodeHandle {
+        match def {
+            BlendTreeNodeDef::LerpNode(input_1, input_2, param_id) => {
+                let input_1_handle = self.add_node(*input_1, animations);
+                let input_2_handle = self.add_node(*input_2, animations);
+                self.lerp_nodes.push(LerpAnimNode {
+                    input_1: input_1_handle,
+                    input_2: input_2_handle,
+                    blend_param: param_id.clone()
+                });
+                AnimNodeHandle::LerpAnimNodeHandle(self.lerp_nodes.len() - 1)
+            }
+            BlendTreeNodeDef::AdditiveNode(input_1, input_2, param_id) => {
+                let input_1_handle = self.add_node(*input_1, animations);
+                let input_2_handle = self.add_node(*input_2, animations);
+                self.additive_nodes.push(AdditiveAnimNode {
+                    base_input: input_1_handle,
+                    additive_input: input_2_handle,
+                    blend_param: param_id.clone()
+                });
+                AnimNodeHandle::AdditiveAnimNodeHandle(self.additive_nodes.len() - 1)
+            }
+            BlendTreeNodeDef::ClipNode(clip_id) => {
+                let clip = animations.get(&clip_id[..]).expect(&format!("Missing animation clip: {}", clip_id)[..]);
+                self.clip_nodes.push(ClipAnimNode {
+                    clip: ClipInstance::new(clip.clone())
+                });
+                AnimNodeHandle::ClipAnimNodeHandle(self.clip_nodes.len() - 1)
+            }
+        }
+    }
+
+    fn get_node(&self, handle: AnimNodeHandle) -> Option<&AnimNode<T>> {
+        match handle {
+            AnimNodeHandle::LerpAnimNodeHandle(i) => Some(&self.lerp_nodes[i]),
+            AnimNodeHandle::AdditiveAnimNodeHandle(i) => Some(&self.additive_nodes[i]),
+            AnimNodeHandle::ClipAnimNodeHandle(i) => Some(&self.clip_nodes[i]),
+            AnimNodeHandle::None => None,
+        }
+    }
 }
+
+pub trait AnimNode<T: Transform> {
+    fn get_output_pose(&self, tree: &AnimBlendTree<T>, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]);
+}
+
+#[derive(Clone)]
+pub enum AnimNodeHandle {
+    None,
+    LerpAnimNodeHandle(usize),
+    AdditiveAnimNodeHandle(usize),
+    ClipAnimNodeHandle(usize),
+}
+
+/// An AnimNode where pose output is linear blend between the output of the two input AnimNodes,
+/// with blend factor according the blend_param value
+pub struct LerpAnimNode {
+    input_1: AnimNodeHandle,
+    input_2: AnimNodeHandle,
+    blend_param: ParamId
+}
+
+impl<T: Transform> AnimNode<T> for LerpAnimNode {
+    fn get_output_pose(&self, tree: &AnimBlendTree<T>, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
+
+        let mut input_poses = [ T::identity(); 64 ];
+        let sample_count = output_poses.len();
+
+        let blend_parameter = params[&self.blend_param[..]];
+
+        if let Some(ref node) = tree.get_node(self.input_1.clone()) {
+            node.get_output_pose(tree, time, params, &mut input_poses[0 .. sample_count]);
+        }
+
+        if let Some(ref node) = tree.get_node(self.input_2.clone()) {
+            node.get_output_pose(tree, time, params, output_poses);
+        }
+
+        for i in (0 .. output_poses.len()) {
+            let pose_1 = input_poses[i];
+            let pose_2 = &mut output_poses[i];
+            (*pose_2) = pose_1.lerp(pose_2.clone(), blend_parameter);
+        }
+    }
+}
+
+/// An AnimNode where pose output is additive blend with output of additive_input
+/// added to base_input,  with blend factor according to value of blend_param
+pub struct AdditiveAnimNode {
+    base_input: AnimNodeHandle,
+    additive_input: AnimNodeHandle,
+    blend_param: ParamId
+}
+
+impl<T: Transform> AnimNode<T> for AdditiveAnimNode {
+    fn get_output_pose(&self, tree: &AnimBlendTree<T>, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
+
+        let mut input_poses = [ T::identity(); 64 ];
+        let sample_count = output_poses.len();
+
+        let blend_parameter = params[&self.blend_param[..]];
+
+        if let Some(ref node) = tree.get_node(self.base_input.clone()) {
+            node.get_output_pose(tree, time, params, &mut input_poses[0 .. sample_count]);
+        }
+
+        if let Some(ref node) = tree.get_node(self.additive_input.clone()) {
+            node.get_output_pose(tree, time, params, output_poses);
+        }
+
+        for i in (0 .. output_poses.len()) {
+            let pose_1 = input_poses[i];
+            let pose_2 = &mut output_poses[i];
+            let additive_pose = T::identity().lerp(pose_2.clone(), blend_parameter);
+            (*pose_2) = pose_1.concat(additive_pose);
+        }
+    }
+}
+
+/// An AnimNode where pose output is from an animation ClipInstance
+pub struct ClipAnimNode<T: Transform> {
+    clip: ClipInstance<T>
+}
+
+impl<T: Transform> AnimNode<T> for ClipAnimNode<T> {
+    fn get_output_pose(&self, _tree: &AnimBlendTree<T>, time: f32, _params: &HashMap<String, f32>, output_poses: &mut [T]) {
+        self.clip.get_pose_at_time(time, output_poses);
+    }
+}
+

@@ -37,11 +37,6 @@ pub use skeleton::{
     Skeleton,
 };
 
-pub use blend_tree::{
-    BlendTreeNode,
-    BlendTreeNodeDef,
-};
-
 pub use manager::{
     AssetManager,
     AssetDefs,

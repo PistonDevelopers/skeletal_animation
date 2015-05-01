@@ -5,7 +5,7 @@ use rustc_serialize::{Decodable, Decoder};
 
 use animation::AnimationClip;
 use transform::{Transform, FromTransform};
-use blend_tree::{BlendTreeNode, BlendTreeNodeDef, ClipId};
+use blend_tree::{AnimBlendTree, BlendTreeNodeDef, ClipId};
 use skeleton::Skeleton;
 
 const MAX_JOINTS: usize = 64;
@@ -14,9 +14,8 @@ const MAX_JOINTS: usize = 64;
 /// of a blend tree and a collection of transitions to other states
 pub struct AnimationState<T: Transform> {
 
-    /// The blend tree used to determine the final blended pose
-    /// for this state
-    pub blend_tree: BlendTreeNode<T>,
+    /// The blend tree used to determine the final blended pose for this state
+    pub blend_tree: AnimBlendTree<T>,
 
     /// Transitions from this state to other AnimationStates
     pub transitions: Vec<AnimationTransition>,
@@ -197,8 +196,8 @@ impl<T: Transform> AnimationController<T> {
         let mut states = HashMap::new();
         for state_def in controller_def.states.iter() {
 
-            let mut blend_tree = BlendTreeNode::from_def(state_def.blend_tree.clone(), animations);
-            blend_tree.synchronize_subtree(0.0, &parameters);
+            let mut blend_tree = AnimBlendTree::from_def(state_def.blend_tree.clone(), animations);
+            blend_tree.synchronize(0.0, &parameters);
 
             states.insert(state_def.name.clone(), AnimationState {
                 blend_tree: blend_tree,
@@ -280,11 +279,9 @@ impl<T: Transform> AnimationController<T> {
 
         {
             let current_state = self.states.get_mut(&self.current_state[..]).unwrap();
+            current_state.blend_tree.synchronize(elapsed_time as f32, &self.parameters);
             current_state.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut local_poses[..]);
         }
-
-        // TODO - would be kinda cool if you could just use a lerp node that pointed to the two
-        // blend trees, but then we'd need RC pointers?
 
         if let Some((transition_start_time, ref transition)) = self.transition {
 
@@ -293,7 +290,7 @@ impl<T: Transform> AnimationController<T> {
             let mut target_poses = [ T::identity(); MAX_JOINTS ];
 
             let target_state = self.states.get_mut(&transition.target_state[..]).unwrap();
-
+            target_state.blend_tree.synchronize(elapsed_time as f32, &self.parameters);
             target_state.blend_tree.get_output_pose(elapsed_time as f32, &self.parameters, &mut target_poses[..]);
 
             let blend_parameter = ((self.local_clock + ext_dt - transition_start_time) / transition.duration as f64) as f32;

@@ -171,9 +171,7 @@ pub trait FromTransform<T: Transform> {
 }
 
 impl FromTransform<DualQuaternion<f32>> for DualQuaternion<f32> {
-    fn from_transform(t: DualQuaternion<f32>) -> DualQuaternion<f32> {
-        t
-    }
+    fn from_transform(t: DualQuaternion<f32>) -> DualQuaternion<f32> { t }
 }
 
 impl FromTransform<QVTransform> for Matrix4<f32> {

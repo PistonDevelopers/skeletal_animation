@@ -13,7 +13,7 @@ use transform::Transform;
 const MAX_JOINTS: usize = 64;
 
 pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
-    skinning_transforms_buffer: gfx::BufferHandle<R, T>,
+    skinning_transforms_buffer: gfx::handle::Buffer<R, T>,
     batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
 }
 
@@ -211,7 +211,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 struct SkinnedShaderParams<R: gfx::Resources> {
     u_model_view_proj: [[f32; 4]; 4],
     u_model_view: [[f32; 4]; 4],
-    u_skinning_transforms: gfx::RawBufferHandle<R>,
+    u_skinning_transforms: gfx::handle::RawBuffer<R>,
     u_texture: gfx::shade::TextureParam<R>,
 }
 

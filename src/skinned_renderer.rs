@@ -95,12 +95,12 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let mesh = factory.create_mesh(vertex_data.as_slice());
+            let mesh = factory.create_mesh(&vertex_data[..]);
 
             let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
             let slice = factory
-                .create_buffer_static::<u32>(index_data.as_slice(), gfx::BufferRole::Index)
+                .create_buffer_static::<u32>(&index_data[..], gfx::BufferRole::Index)
                 .to_slice(gfx::PrimitiveType::TriangleList);
 
             let skinning_transforms_buffer = factory.create_buffer_dynamic::<T>(MAX_JOINTS, gfx::BufferRole::Uniform);

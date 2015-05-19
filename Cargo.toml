@@ -33,3 +33,6 @@ git = "https://github.com/pistondevelopers/gfx_texture.git"
 
 [dependencies.interpolation]
 git = "https://github.com/pistondevelopers/interpolation.git"
+
+[dependencies.piston-float]
+git = "https://github.com/PistonDevelopers/float"

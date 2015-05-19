@@ -1,8 +1,3 @@
-#![feature(custom_attribute)]
-#![feature(plugin)]
-#![feature(convert)]
-#![feature(std_misc)]
-
 //! A library for data-driven skeletal animation.
 
 extern crate collada;
@@ -16,6 +11,7 @@ extern crate dual_quaternion;
 extern crate vecmath;
 extern crate interpolation;
 extern crate rustc_serialize;
+extern crate float;
 
 pub mod animation;
 pub mod skinned_renderer;

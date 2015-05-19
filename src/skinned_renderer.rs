@@ -18,10 +18,11 @@ pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
     batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
 }
 
-pub struct SkinnedRenderer<R: gfx::Resources, T: Transform> {
+pub struct SkinnedRenderer<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> {
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R, T>>,
     context: gfx::render::batch::Context<R>,
+    factory: F,
 }
 
 pub trait HasShaderSources<'a> {
@@ -59,13 +60,15 @@ impl<'a> HasShaderSources<'a> for DualQuaternion<f32> {
     }
 }
 
-impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, T> {
+impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, F, T> {
 
-    pub fn from_collada<F: gfx::Factory<R>> (
-        factory: &mut F,
+    pub fn from_collada (
+        factory: F,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
-    ) -> Result<SkinnedRenderer<R, T>, gfx::ProgramError> {
+    ) -> Result<SkinnedRenderer<R, F, T>, gfx::ProgramError> {
+
+        let mut factory = factory;
 
         let program = {
             let vs = T::vertex_shader_source();
@@ -103,7 +106,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             let skinning_transforms_buffer = factory.create_buffer_dynamic::<T>(MAX_JOINTS, gfx::BufferRole::Uniform);
 
             let texture = gfx_texture::Texture::from_path(
-                factory,
+                &mut factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
@@ -136,13 +139,13 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             render_batches: render_batches,
             skeleton: skeleton.clone(),
             context: context,
+            factory: factory
         })
     }
 
-    pub fn render<S: gfx::Stream<R>, F: gfx::Factory<R>> (
+    pub fn render<S: gfx::Stream<R>> (
         &mut self,
         stream: &mut S,
-        factory: &mut F,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
         joint_poses: &[T]
@@ -155,7 +158,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             material.batch.params.u_model_view_proj = projection;
 
             // FIXME -- should all be able to share the same buffer
-            factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+            self.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
 
             stream.draw(&(&material.batch, &self.context)).unwrap();
         }

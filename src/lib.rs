@@ -2,11 +2,11 @@
 #![feature(plugin)]
 #![feature(convert)]
 #![feature(std_misc)]
-#![plugin(gfx_macros)]
 
 //! A library for data-driven skeletal animation.
 
 extern crate collada;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_debug_draw;
 extern crate gfx_device_gl;

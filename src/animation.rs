@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use collada::document::ColladaDocument;
 use collada;
+use float::Radians;
 
 use math::*;
 use skeleton::Skeleton;
@@ -54,7 +55,7 @@ impl<T: Transform> AnimationClip<T> {
         // Wacky. Shouldn't it be an error if the struct field isn't present?
         // FIXME - use an Option
         let adjust = if !clip_def.rotate_z.is_nan() {
-            mat4_rotate_z(clip_def.rotate_z.to_radians())
+            mat4_rotate_z(clip_def.rotate_z.deg_to_rad())
         } else {
             mat4_id()
         };

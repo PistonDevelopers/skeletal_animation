@@ -216,15 +216,15 @@ where `skeleton` is the shared skeleton instance. Will work with both `Matrix4` 
 // On initialization...
 
 // To use matrices with a Linear Blend Skinning (LBS) shader
-let skinned_renderer = SkinnedRenderer::<_, Matrix4<f32>>::from_collada_with_canvas(
-    canvas, // gfx::Canvas
+let skinned_renderer = SkinnedRenderer::<_, _, Matrix4<f32>>::from_collada(
+    factory, // gfx::Factory instance, to be owned by SkinnedRenderer
 	collada_document, // the parsed Collada document for the rigged mesh
 	["assets/skin.png", "assets/hair.png", "assets/eyes.png"], // Textures for each submesh in the Collada source
 ).unwrap();
 
 // To use dual-quaternions with a Dual-Quaternion Linear Blend Skinning (DLB) shader
-let skinned_renderer = SkinnedRenderer::<_, DualQuaternion<f32>>::from_collada_with_canvas(
-    canvas, // gfx::Canvas
+let skinned_renderer = SkinnedRenderer::<_, _, DualQuaternion<f32>>::from_collada(
+    factory, // gfx::Factory instance, to be owned by SkinnedRenderer
 	collada_document, // the parsed Collada document for the rigged mesh
 	["assets/skin.png", "assets/hair.png", "assets/eyes.png"], // Textures for each submesh in the Collada source
 ).unwrap();
@@ -233,8 +233,7 @@ let skinned_renderer = SkinnedRenderer::<_, DualQuaternion<f32>>::from_collada_w
 
 // Later in event loop...
 skinned_renderer.render(
-	&mut graphics, // gfx::Graphics
-	&output, // gfx::Output
+	&mut stream, // gfx::Stream
 	camera_view, // Matrix4<f32>
 	camera_projection, // <Matrix4<f32>
 	&global_poses // The output poses from the controller

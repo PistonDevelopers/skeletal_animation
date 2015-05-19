@@ -1,12 +1,7 @@
-#![feature(custom_attribute)]
-#![feature(plugin)]
-#![feature(convert)]
-#![feature(std_misc)]
-#![plugin(gfx_macros)]
-
 //! A library for data-driven skeletal animation.
 
 extern crate collada;
+#[macro_use]
 extern crate gfx;
 extern crate gfx_debug_draw;
 extern crate gfx_device_gl;
@@ -16,6 +11,7 @@ extern crate dual_quaternion;
 extern crate vecmath;
 extern crate interpolation;
 extern crate rustc_serialize;
+extern crate float;
 
 pub mod animation;
 pub mod skinned_renderer;

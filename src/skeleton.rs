@@ -33,7 +33,12 @@ impl Skeleton {
         }
     }
 
-    pub fn draw<R: gfx::Resources, T: Transform>(&self, global_poses: &[T], debug_renderer: &mut gfx_debug_draw::DebugRenderer<R>, draw_labels: bool) {
+    pub fn draw<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> (
+        &self,
+        global_poses: &[T],
+        debug_renderer: &mut gfx_debug_draw::DebugRenderer<R, F>,
+        draw_labels: bool)
+    {
 
         for (joint_index, joint) in self.joints.iter().enumerate() {
 

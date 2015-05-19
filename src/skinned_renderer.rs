@@ -1,5 +1,6 @@
 use std::default::Default;
 use std::path::Path;
+use std::marker::PhantomData;
 
 use collada;
 use gfx;
@@ -17,10 +18,11 @@ pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
     batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
 }
 
-pub struct SkinnedRenderer<R: gfx::Resources, T: Transform> {
+pub struct SkinnedRenderer<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> {
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R, T>>,
     context: gfx::render::batch::Context<R>,
+    factory: F,
 }
 
 pub trait HasShaderSources<'a> {
@@ -58,35 +60,20 @@ impl<'a> HasShaderSources<'a> for DualQuaternion<f32> {
     }
 }
 
-impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, T> {
+impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, F, T> {
 
-    pub fn from_collada_with_canvas<
-        C: gfx::CommandBuffer<R>,
-        F: gfx::Factory<R>,
-        O: gfx::render::target::Output<R>,
-        D: Device<Resources = R, CommandBuffer = C>,
-    >(
-        canvas: &mut gfx::Canvas<O, D, F>,
-        collada_document: collada::document::ColladaDocument,
-        texture_paths: Vec<&str>,
-    ) -> Result<SkinnedRenderer<R, T>, gfx::ProgramError> {
-        SkinnedRenderer::from_collada(&mut canvas.factory, &canvas.device, collada_document, texture_paths)
-    }
-
-    pub fn from_collada<
-        F: gfx::Factory<R>,
-        D: gfx::Device,
-    > (
-        factory: &mut F,
-        device: &D,
+    pub fn from_collada (
+        factory: F,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
-    ) -> Result<SkinnedRenderer<R, T>, gfx::ProgramError> {
+    ) -> Result<SkinnedRenderer<R, F, T>, gfx::ProgramError> {
+
+        let mut factory = factory;
 
         let program = {
             let vs = T::vertex_shader_source();
             let fs = T::fragment_shader_source();
-            match factory.link_program_source(vs, fs, device.get_capabilities()) {
+            match factory.link_program_source(vs, fs) {
                 Ok(program_handle) => program_handle,
                 Err(e) => return Err(e),
             }
@@ -108,18 +95,18 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let mesh = factory.create_mesh(vertex_data.as_slice());
+            let mesh = factory.create_mesh(&vertex_data[..]);
 
             let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
 
             let slice = factory
-                .create_buffer_index::<u32>(index_data.as_slice())
+                .create_buffer_static::<u32>(&index_data[..], gfx::BufferRole::Index)
                 .to_slice(gfx::PrimitiveType::TriangleList);
 
-            let skinning_transforms_buffer = factory.create_buffer::<T>(MAX_JOINTS, gfx::BufferUsage::Dynamic);
+            let skinning_transforms_buffer = factory.create_buffer_dynamic::<T>(MAX_JOINTS, gfx::BufferRole::Uniform);
 
             let texture = gfx_texture::Texture::from_path(
-                factory,
+                &mut factory,
                 &Path::new(&texture_paths[i]),
                 &gfx_texture::Settings::new()
             ).unwrap();
@@ -136,6 +123,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
                 u_model_view: mat4_id(),
                 u_skinning_transforms: skinning_transforms_buffer.raw().clone(),
                 u_texture: (texture.handle(), Some(sampler)),
+                _r: PhantomData,
             };
 
             let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = context.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
@@ -151,33 +139,13 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             render_batches: render_batches,
             skeleton: skeleton.clone(),
             context: context,
+            factory: factory
         })
     }
 
-    pub fn render_canvas<
-        C: gfx::CommandBuffer<R>,
-        F: gfx::Factory<R>,
-        O: gfx::render::target::Output<R>,
-        D: Device<Resources = R, CommandBuffer = C>,
-    >(
+    pub fn render<S: gfx::Stream<R>> (
         &mut self,
-        canvas: &mut gfx::Canvas<O, D, F>,
-        view: [[f32; 4]; 4],
-        projection: [[f32; 4]; 4],
-        joint_poses: &[T]
-    ) {
-        self.render(&mut canvas.renderer, &mut canvas.factory, &canvas.output, view, projection, joint_poses);
-    }
-
-    pub fn render<
-        C: gfx::CommandBuffer<R>,
-        F: gfx::Factory<R>,
-        O: gfx::render::target::Output<R>,
-    >(
-        &mut self,
-        renderer: &mut gfx::Renderer<R, C>,
-        factory: &mut F,
-        output: &O,
+        stream: &mut S,
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
         joint_poses: &[T]
@@ -190,9 +158,9 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             material.batch.params.u_model_view_proj = projection;
 
             // FIXME -- should all be able to share the same buffer
-            factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+            self.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
 
-            renderer.draw(&(&material.batch, &self.context), output).unwrap();
+            stream.draw(&(&material.batch, &self.context)).unwrap();
         }
     }
 
@@ -207,25 +175,20 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
     }
 }
 
-#[shader_param]
-struct SkinnedShaderParams<R: gfx::Resources> {
-    u_model_view_proj: [[f32; 4]; 4],
-    u_model_view: [[f32; 4]; 4],
-    u_skinning_transforms: gfx::handle::RawBuffer<R>,
-    u_texture: gfx::shade::TextureParam<R>,
-}
+gfx_parameters!( SkinnedShaderParams {
+    u_model_view_proj@ u_model_view_proj: [[f32; 4]; 4],
+    u_model_view@ u_model_view: [[f32; 4]; 4],
+    u_skinning_transforms@ u_skinning_transforms: gfx::handle::RawBuffer<R>,
+    u_texture@ u_texture: gfx::shade::TextureParam<R>,
+});
 
-#[vertex_format]
-#[derive(Copy)]
-#[derive(Clone)]
-#[derive(Debug)]
-struct SkinnedVertex {
-    pos: [f32; 3],
-    normal: [f32; 3],
-    uv: [f32; 2],
-    joint_indices: [i32; 4],
-    joint_weights: [f32; 4], // TODO last weight is redundant
-}
+gfx_vertex!(SkinnedVertex {
+    pos@ pos: [f32; 3],
+    normal@ normal: [f32; 3],
+    uv@ uv: [f32; 2],
+    joint_indices@ joint_indices: [i32; 4],
+    joint_weights@ joint_weights: [f32; 4], // TODO last weight is redundant
+});
 
 impl Default for SkinnedVertex {
     fn default() -> SkinnedVertex {

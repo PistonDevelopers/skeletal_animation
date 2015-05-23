@@ -9,6 +9,7 @@ pub trait Transform: Copy {
     fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32>;
     fn to_matrix(self) -> Matrix4<f32>;
     fn from_matrix(Matrix4<f32>) -> Self;
+    fn set_rotation(&mut self, rotation: Quaternion<f32>);
 }
 
 /// Transformation represented by separate scaling, translation, and rotation factors.
@@ -34,6 +35,10 @@ impl Transform for QVTransform {
             scale: 1.0,
             rotation: quaternion_id(),
         }
+    }
+
+    fn set_rotation(&mut self, rotation: Quaternion<f32>) {
+        self.rotation = rotation;
     }
 
     fn concat(self, other: QVTransform) -> QVTransform {
@@ -91,6 +96,11 @@ impl Transform for DualQuaternion<f32> {
         dual_quaternion::id()
     }
 
+    fn set_rotation(&mut self, rotation: Quaternion<f32>) {
+        let t = dual_quaternion::get_translation(*self);
+        *self = dual_quaternion::from_rotation_and_translation(rotation, t);
+    }
+
     fn concat(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
         dual_quaternion::mul(self, other)
     }
@@ -114,7 +124,7 @@ impl Transform for DualQuaternion<f32> {
         let rotation = dual_quaternion::get_rotation(self);
         let translation = dual_quaternion::get_translation(self);
 
-        let mut m = quaternion_to_matrix(rotation);
+        let mut m = mat4_transposed(quaternion_to_matrix(rotation));
 
         m[0][3] = translation[0];
         m[1][3] = translation[1];
@@ -140,6 +150,23 @@ impl Transform for Matrix4<f32> {
 
     fn identity() -> Matrix4<f32> {
         mat4_id()
+    }
+
+    fn set_rotation(&mut self, rotation: Quaternion<f32>) {
+
+        let rotation = quaternion_to_matrix(rotation);
+
+        self[0][0] = rotation[0][0];
+        self[1][0] = rotation[1][0];
+        self[2][0] = rotation[2][0];
+
+        self[0][1] = rotation[0][1];
+        self[1][1] = rotation[1][1];
+        self[2][1] = rotation[2][1];
+
+        self[0][2] = rotation[0][2];
+        self[1][2] = rotation[1][2];
+        self[2][2] = rotation[2][2];
     }
 
     fn concat(self, other: Matrix4<f32>) -> Matrix4<f32> {
@@ -174,8 +201,58 @@ impl FromTransform<DualQuaternion<f32>> for DualQuaternion<f32> {
     fn from_transform(t: DualQuaternion<f32>) -> DualQuaternion<f32> { t }
 }
 
-impl FromTransform<QVTransform> for Matrix4<f32> {
-    fn from_transform(t: QVTransform) -> Matrix4<f32> {
+impl<T: Transform> FromTransform<T> for Matrix4<f32> {
+    fn from_transform(t: T) -> Matrix4<f32> {
         t.to_matrix()
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use vecmath;
+    use quaternion;
+    use dual_quaternion;
+
+    use super::Transform;
+
+    static EPSILON: f32 = 0.000001;
+
+    #[test]
+    fn test_dual_quaternion_to_matrix() {
+
+        let a = [1.0, 0.0, 0.0];
+        let b = [0.0, 1.0, 0.0];
+
+        let q = quaternion::rotation_from_to(a, b);
+
+        let dq = dual_quaternion::from_rotation_and_translation(q, [0.0, 0.0, 0.0]);
+        println!("{:?}", dq.transform_vector(a));
+        assert!(vecmath::vec3_len(vecmath::vec3_sub(b, dq.transform_vector(a))) < EPSILON);
+
+        let m = dq.to_matrix();
+        println!("{:?}", m.transform_vector(a));
+        assert!(vecmath::vec3_len(vecmath::vec3_sub(b, m.transform_vector(a))) < EPSILON);
+    }
+
+    #[test]
+    fn test_dual_quaternion_set_rotation() {
+
+        let a = [1.0, 0.0, 0.0];
+        let b = [0.0, 1.0, 0.0];
+
+        let q = quaternion::rotation_from_to(a, b);
+        let q2 = quaternion::rotation_from_to(b, a);
+
+        let mut dq = dual_quaternion::from_rotation_and_translation(q, [0.0, 1.0, 0.0]);
+
+        println!("{:?}", dq.transform_vector(a));
+        assert!(vecmath::vec3_len(vecmath::vec3_sub([0.0, 2.0, 0.0],
+                                                    dq.transform_vector(a))) < EPSILON);
+
+        dq.set_rotation(q2);
+        println!("{:?}", dq.transform_vector(b));
+        assert!(vecmath::vec3_len(vecmath::vec3_sub([1.0, 1.0, 0.0],
+                                                    dq.transform_vector(b))) < EPSILON);
     }
 }

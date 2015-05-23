@@ -4,8 +4,10 @@ use std::rc::Rc;
 use rustc_serialize::{Decodable, Decoder};
 
 use animation::{AnimationClip, ClipInstance};
+use skeleton::{Skeleton, JointIndex};
 
 use transform::Transform;
+use math::*;
 
 /// Identifier for an AnimationClip within a BlendTreeNodeDef
 pub type ClipId = String;
@@ -18,6 +20,7 @@ pub type ParamId = String;
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
     AdditiveNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
+    IKNode(Box<BlendTreeNodeDef>, String, ParamId, ParamId, ParamId, ParamId),
     ClipNode(ClipId),
 }
 
@@ -60,6 +63,27 @@ impl Decodable for BlendTreeNodeDef {
                     Ok(BlendTreeNodeDef::AdditiveNode(Box::new(input_1), Box::new(input_2), blend_param_name))
 
                 },
+                "IKNode" => {
+
+                    let input = try!(decoder.read_struct_field("input", 0, Decodable::decode));
+
+                    let effector_name = try!(decoder.read_struct_field("effector", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+
+                    let blend_param_name = try!(decoder.read_struct_field("blend_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+
+                    let target_x_name = try!(decoder.read_struct_field("target_x_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let target_y_name = try!(decoder.read_struct_field("target_y_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let target_z_name = try!(decoder.read_struct_field("target_z_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+
+
+                    Ok(BlendTreeNodeDef::IKNode(Box::new(input),
+                                                effector_name,
+                                                blend_param_name,
+                                                target_x_name,
+                                                target_y_name,
+                                                target_z_name))
+
+                },
                 "ClipNode" => {
                     let clip_source = try!(decoder.read_struct_field("clip_source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
                     Ok(BlendTreeNodeDef::ClipNode(clip_source))
@@ -75,7 +99,9 @@ pub struct AnimBlendTree<T: Transform> {
     root_node: AnimNodeHandle,
     lerp_nodes: Vec<LerpAnimNode>,
     additive_nodes: Vec<AdditiveAnimNode>,
+    ik_nodes: Vec<IKNode>,
     clip_nodes: Vec<ClipAnimNode<T>>,
+    skeleton: Rc<Skeleton>,
 }
 
 impl<T: Transform> AnimBlendTree<T> {
@@ -89,17 +115,20 @@ impl<T: Transform> AnimBlendTree<T> {
     /// * `animations` - A mapping from ClipIds to shared AnimationClip instances
     pub fn from_def(
         def: BlendTreeNodeDef,
-        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>
+        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>,
+        skeleton: Rc<Skeleton>,
     ) -> AnimBlendTree<T> {
 
         let mut tree = AnimBlendTree {
             root_node: AnimNodeHandle::None,
             lerp_nodes: Vec::new(),
             additive_nodes: Vec::new(),
+            ik_nodes: Vec::new(),
             clip_nodes: Vec::new(),
+            skeleton: skeleton.clone()
         };
 
-        tree.root_node = tree.add_node(def, animations);
+        tree.root_node = tree.add_node(def, animations, &skeleton);
         tree
     }
 
@@ -156,12 +185,13 @@ impl<T: Transform> AnimBlendTree<T> {
     fn add_node(
         &mut self,
         def: BlendTreeNodeDef,
-        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>
+        animations: &HashMap<ClipId, Rc<AnimationClip<T>>>,
+        skeleton: &Skeleton
     ) -> AnimNodeHandle {
         match def {
             BlendTreeNodeDef::LerpNode(input_1, input_2, param_id) => {
-                let input_1_handle = self.add_node(*input_1, animations);
-                let input_2_handle = self.add_node(*input_2, animations);
+                let input_1_handle = self.add_node(*input_1, animations, skeleton);
+                let input_2_handle = self.add_node(*input_2, animations, skeleton);
                 self.lerp_nodes.push(LerpAnimNode {
                     input_1: input_1_handle,
                     input_2: input_2_handle,
@@ -170,14 +200,27 @@ impl<T: Transform> AnimBlendTree<T> {
                 AnimNodeHandle::LerpAnimNodeHandle(self.lerp_nodes.len() - 1)
             }
             BlendTreeNodeDef::AdditiveNode(input_1, input_2, param_id) => {
-                let input_1_handle = self.add_node(*input_1, animations);
-                let input_2_handle = self.add_node(*input_2, animations);
+                let input_1_handle = self.add_node(*input_1, animations, skeleton);
+                let input_2_handle = self.add_node(*input_2, animations, skeleton);
                 self.additive_nodes.push(AdditiveAnimNode {
                     base_input: input_1_handle,
                     additive_input: input_2_handle,
                     blend_param: param_id.clone()
                 });
                 AnimNodeHandle::AdditiveAnimNodeHandle(self.additive_nodes.len() - 1)
+            }
+            BlendTreeNodeDef::IKNode(input, effector_name, blend_param, target_x_param, target_y_param, target_z_param) => {
+                let input_handle = self.add_node(*input, animations, skeleton);
+                self.ik_nodes.push(IKNode {
+                    input: input_handle,
+                    blend_param: blend_param.clone(),
+                    target_x_param: target_x_param.clone(),
+                    target_y_param: target_y_param.clone(),
+                    target_z_param: target_z_param.clone(),
+                    effector_bone_index: skeleton.get_joint_index(&effector_name).unwrap(),
+
+                });
+                AnimNodeHandle::IKAnimNodeHandle(self.ik_nodes.len() - 1)
             }
             BlendTreeNodeDef::ClipNode(clip_id) => {
                 let clip = animations.get(&clip_id[..]).expect(&format!("Missing animation clip: {}", clip_id)[..]);
@@ -194,6 +237,7 @@ impl<T: Transform> AnimBlendTree<T> {
             AnimNodeHandle::LerpAnimNodeHandle(i) => Some(&self.lerp_nodes[i]),
             AnimNodeHandle::AdditiveAnimNodeHandle(i) => Some(&self.additive_nodes[i]),
             AnimNodeHandle::ClipAnimNodeHandle(i) => Some(&self.clip_nodes[i]),
+            AnimNodeHandle::IKAnimNodeHandle(i) => Some(&self.ik_nodes[i]),
             AnimNodeHandle::None => None,
         }
     }
@@ -209,6 +253,7 @@ pub enum AnimNodeHandle {
     LerpAnimNodeHandle(usize),
     AdditiveAnimNodeHandle(usize),
     ClipAnimNodeHandle(usize),
+    IKAnimNodeHandle(usize),
 }
 
 /// An AnimNode where pose output is linear blend between the output of the two input AnimNodes,
@@ -284,5 +329,138 @@ pub struct ClipAnimNode<T: Transform> {
 impl<T: Transform> AnimNode<T> for ClipAnimNode<T> {
     fn get_output_pose(&self, _tree: &AnimBlendTree<T>, time: f32, _params: &HashMap<String, f32>, output_poses: &mut [T]) {
         self.clip.get_pose_at_time(time, output_poses);
+    }
+}
+
+pub struct IKNode {
+    input: AnimNodeHandle,
+    blend_param: ParamId,
+    target_x_param: ParamId,
+    target_y_param: ParamId,
+    target_z_param: ParamId,
+    effector_bone_index: JointIndex,
+}
+
+impl<T: Transform> AnimNode<T> for IKNode {
+    fn get_output_pose(&self, tree: &AnimBlendTree<T>, time: f32, params: &HashMap<String, f32>, output_poses: &mut [T]) {
+
+        // Get input pose
+        if let Some(ref node) = tree.get_node(self.input.clone()) {
+            node.get_output_pose(tree, time, params, output_poses);
+        }
+
+        let effector_target_position = [params[&self.target_x_param[..]],
+                                        params[&self.target_y_param[..]],
+                                        params[&self.target_z_param[..]]];
+
+        // Assume target position in model-space
+
+        let effector_bone_index = self.effector_bone_index;
+        let middle_bone_index = tree.skeleton.joints[effector_bone_index as usize].parent_index;
+        let root_bone_index = tree.skeleton.joints[middle_bone_index as usize].parent_index;
+        let root_bone_parent_index = tree.skeleton.joints[root_bone_index as usize].parent_index;
+
+        // Get bone positions in model space by calculating global poses
+        let mut global_poses = [ Matrix4::<f32>::identity(); 64 ];
+        tree.skeleton.calculate_global_poses(output_poses, &mut global_poses);
+
+        let root_bone_position = global_poses[root_bone_index as usize].transform_vector([0.0, 0.0, 0.0]);
+        let middle_bone_position = global_poses[middle_bone_index as usize].transform_vector([0.0, 0.0, 0.0]);
+        let effector_bone_position = global_poses[effector_bone_index as usize].transform_vector([0.0, 0.0, 0.0]);
+
+        let length_1 = vec3_len(vec3_sub(root_bone_position, middle_bone_position));
+        let length_2 = vec3_len(vec3_sub(middle_bone_position, effector_bone_position));
+
+        // get effector target position on 2D plane,
+        // with coordinates relative to root bone position
+
+        // x direction of plane
+        let root_to_effector = vec3_normalized(vec3_sub(effector_target_position, root_bone_position));
+
+        // Somewhat arbitrary... this will probably usually look OK
+        let plane_normal = vec3_normalized(vec3_cross(vec3_sub(middle_bone_position, root_bone_position),
+                                                      root_to_effector));
+
+        // y direction of plane
+        let plane_y_direction = vec3_normalized(vec3_cross(root_to_effector, plane_normal));
+
+        let plane_rotation = [
+            root_to_effector,
+            plane_y_direction,
+            plane_normal
+        ];
+
+        // Convert to 2D coords on the plane, where parent root is at (0,0) and target is at (x,y)
+        let plane_target = row_mat3_transform(plane_rotation,
+                                              vec3_sub(effector_target_position,
+                                                       root_bone_position));
+
+        if let Some(elbow_target) = solve_ik_2d(length_1, length_2, [plane_target[0], plane_target[1]]) {
+
+            let mut target_poses = [ T::identity(); 64 ];
+
+            for i in (0 .. 64) {
+                target_poses[i] = output_poses[i];
+            }
+
+            let middle_bone_plane = [elbow_target[0], elbow_target[1], 0.0];
+
+            let middle_bone_target = vec3_add(row_mat3_transform(mat3_inv(plane_rotation),
+                                                                 middle_bone_plane),
+                                              root_bone_position);
+
+            // given middle bone position, calculate root bone local rotation/pose
+
+            // Get middle bone position in joint space...
+            let mut m = global_poses[root_bone_parent_index as usize];
+            let m2 = global_poses[root_bone_index as usize];
+
+            m[0][3] = m2[0][3];
+            m[1][3] = m2[1][3];
+            m[2][3] = m2[2][3];
+
+            let p = row_mat4_transform(mat4_inv(m), [middle_bone_target[0], middle_bone_target[1], middle_bone_target[2], 1.0]);
+            let p = [p[0], p[1], p[2]];
+
+            // FIXME -- problem when using QVTransforms, only works with opposing
+            // rotation, figure out where maths are wonky!
+            let root_target_rotation = quaternion::rotation_from_to(
+                [0.0, 1.0, 0.0],
+                vec3_normalized(p),
+            );
+
+            target_poses[root_bone_index as usize].set_rotation(root_target_rotation);
+
+            // Get effector bone position in middle joint target space...
+
+            let root_target_global_pose = row_mat4_mul(
+                global_poses[root_bone_parent_index as usize],
+                target_poses[root_bone_index as usize].to_matrix(),
+            );
+
+            let mut m = root_target_global_pose;
+            m[0][3] = middle_bone_target[0];
+            m[1][3] = middle_bone_target[1];
+            m[2][3] = middle_bone_target[2];
+
+            let p = row_mat4_transform(mat4_inv(m), [effector_target_position[0], effector_target_position[1], effector_target_position[2], 1.0]);
+            let p = [p[0], p[1], p[2]];
+
+            let middle_target_rotation = quaternion::rotation_from_to(
+                [0.0, 1.0, 0.0],
+                vec3_normalized(p),
+            );
+
+            target_poses[middle_bone_index as usize].set_rotation(middle_target_rotation);
+
+            // Blend between input and IK target poses
+
+            let blend_parameter = params[&self.blend_param[..]];
+            for i in (0 .. output_poses.len()) {
+                let ik_pose = target_poses[i];
+                let output_pose = &mut output_poses[i];
+                (*output_pose) = output_pose.lerp(ik_pose.clone(), blend_parameter);
+            }
+        }
     }
 }

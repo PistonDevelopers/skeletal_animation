@@ -3,7 +3,7 @@ use gfx_debug_draw;
 
 use collada;
 use math::*;
-use transform::Transform;
+use transform::{Transform, FromTransform};
 
 pub type JointIndex = u8;
 pub const ROOT_JOINT_PARENT_INDEX: JointIndex  = 255u8;
@@ -31,6 +31,36 @@ impl Skeleton {
                 }
             }).collect()
         }
+    }
+
+    pub fn calculate_global_poses<T: Transform, TOutput: Transform + FromTransform<T>>(
+        &self,
+        local_poses: &[T],
+        global_poses: &mut [TOutput],
+    ) {
+
+        for (joint_index, joint) in self.joints.iter().enumerate() {
+
+            let parent_pose = if !joint.is_root() {
+                global_poses[joint.parent_index as usize]
+            } else {
+                TOutput::identity()
+            };
+
+            let local_pose = local_poses[joint_index];
+            global_poses[joint_index] = parent_pose.concat(TOutput::from_transform(local_pose));
+        }
+    }
+
+    pub fn get_joint_index(&self, joint_name: &str) -> Option<JointIndex> {
+
+        for (index, joint) in self.joints.iter().enumerate() {
+            if joint.name == joint_name {
+                return Some(index as JointIndex);
+            }
+        }
+
+        None
     }
 
     pub fn draw<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> (

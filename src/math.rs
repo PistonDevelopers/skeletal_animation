@@ -1,17 +1,6 @@
 use std::mem;
 
-pub use vecmath::{
-    Vector3,
-    Matrix4,
-    vec3_add,
-    vec3_sub,
-    vec3_scale,
-    row_mat4_mul,
-    row_mat4_transform,
-    mat4_transposed,
-    mat4_inv,
-    mat4_id,
-};
+pub use vecmath::*;
 
 pub use quaternion::id as quaternion_id;
 pub use quaternion::mul as quaternion_mul;
@@ -152,3 +141,67 @@ pub fn inv_sqrt(x: f32) -> f32 {
 
 }
 
+pub fn solve_ik_2d(length_1: f32, length_2: f32, target: [f32; 2]) -> Option<[f32; 2]>
+{
+    let x = target[0];
+    let y = target[1];
+    let distance_squared = x * x + y * y;
+    let distance = distance_squared.sqrt();
+
+    let l1_squared = length_1 * length_1;
+    let l2_squared = length_2 * length_2;
+
+    if (length_1 - length_2).abs() > distance {
+        // target too close for solution
+        return None;
+    }
+
+    if (length_1 + length_2) < distance {
+        // target too far to reach, just reach in direction of target
+        return Some(vec2_scale(vec2_normalized(target), length_1));
+    }
+
+    let alpha_2 = target[1].atan2(target[0]);
+    let alpha_1 = ((l1_squared + distance_squared - l2_squared)
+                   / (2.0 * length_1 * distance_squared.sqrt())).acos();
+
+    let angle = alpha_1 + alpha_2;
+
+    // Either +angle or -angle would be valid solutions
+    // TODO: take current middle joint position as a param,
+    // choose solution closest to current positi
+
+    Some([length_1 * angle.cos(),
+          length_1 * angle.sin()])
+}
+
+#[cfg(test)]
+mod test {
+
+    static EPSILON: f32 = 0.000001;
+
+    #[test]
+    fn test_ik() {
+
+        let m = super::solve_ik_2d(2.0, 3.0, [0.0, 5.0]).unwrap();
+        println!("{:?}", m);
+        assert!((m[0] - 0.0).abs() < EPSILON);
+        assert!((m[1] - 2.0).abs() < EPSILON);
+
+        let m = super::solve_ik_2d(2.0, 3.0, [5.0, 0.0]).unwrap();
+        println!("{:?}", m);
+        assert!((m[0] - 2.0).abs() < EPSILON);
+        assert!((m[1] - 0.0).abs() < EPSILON);
+
+        let m = super::solve_ik_2d(2.0, 3.0, [0.0, -5.0]).unwrap();
+        println!("{:?}", m);
+        assert!((m[0] - 0.0).abs() < EPSILON);
+        assert!((m[1] + 2.0).abs() < EPSILON);
+
+        let m = super::solve_ik_2d(2f32.sqrt(), 2f32.sqrt(), [-3.0, -3.0]).unwrap();
+        println!("{:?}", m);
+        assert!((m[0] + 1.0).abs() < EPSILON);
+        assert!((m[1] + 1.0).abs() < EPSILON);
+    }
+
+}

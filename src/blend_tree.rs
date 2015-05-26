@@ -349,18 +349,17 @@ impl<T: Transform> AnimNode<T> for IKNode {
             node.get_output_pose(tree, time, params, output_poses);
         }
 
+        // Target position should be in model-space
         let effector_target_position = [params[&self.target_x_param[..]],
                                         params[&self.target_y_param[..]],
                                         params[&self.target_z_param[..]]];
-
-        // Assume target position in model-space
 
         let effector_bone_index = self.effector_bone_index;
         let middle_bone_index = tree.skeleton.joints[effector_bone_index as usize].parent_index;
         let root_bone_index = tree.skeleton.joints[middle_bone_index as usize].parent_index;
         let root_bone_parent_index = tree.skeleton.joints[root_bone_index as usize].parent_index;
 
-        // Get bone positions in model space by calculating global poses
+        // Get bone positions in model-space by calculating global poses
         let mut global_poses = [ Matrix4::<f32>::identity(); 64 ];
         tree.skeleton.calculate_global_poses(output_poses, &mut global_poses);
 
@@ -397,8 +396,8 @@ impl<T: Transform> AnimNode<T> for IKNode {
 
         if let Some(elbow_target) = solve_ik_2d(length_1, length_2, [plane_target[0], plane_target[1]]) {
 
+            // Copy input poses into IK target poses
             let mut target_poses = [ T::identity(); 64 ];
-
             for i in (0 .. 64) {
                 target_poses[i] = output_poses[i];
             }
@@ -409,49 +408,34 @@ impl<T: Transform> AnimNode<T> for IKNode {
                                                                  middle_bone_plane),
                                               root_bone_position);
 
-            // given middle bone position, calculate root bone local rotation/pose
+            // calculate root bone pose
+            {
+                let original_direction = vec3_normalized(vec3_sub(middle_bone_position, root_bone_position));
+                let target_direction = vec3_normalized(vec3_sub(middle_bone_target, root_bone_position));
+                let rotation_change = quaternion::rotation_from_to(target_direction, original_direction);
+                let original_rotation = global_poses[root_bone_index as usize].get_rotation();
+                let new_rotation = quaternion::mul(original_rotation, rotation_change);
 
-            // Get middle bone position in joint space...
-            let mut m = global_poses[root_bone_parent_index as usize];
-            let m2 = global_poses[root_bone_index as usize];
+                global_poses[root_bone_index as usize].set_rotation(new_rotation);
 
-            m[0][3] = m2[0][3];
-            m[1][3] = m2[1][3];
-            m[2][3] = m2[2][3];
+                let local_pose = row_mat4_mul(mat4_inv(global_poses[root_bone_parent_index as usize]), global_poses[root_bone_index as usize]);
+                target_poses[root_bone_index as usize] = T::from_matrix(local_pose);
+            }
 
-            let p = row_mat4_transform(mat4_inv(m), [middle_bone_target[0], middle_bone_target[1], middle_bone_target[2], 1.0]);
-            let p = [p[0], p[1], p[2]];
+            // calculate middle bone pose
+            {
+                let original_direction = vec3_normalized(vec3_sub(effector_bone_position, middle_bone_position));
+                let target_direction = vec3_normalized(vec3_sub(effector_target_position, middle_bone_target));
+                let rotation_change = quaternion::rotation_from_to(target_direction, original_direction);
+                let original_rotation = global_poses[middle_bone_index as usize].get_rotation();
+                let new_rotation = quaternion::mul(original_rotation, rotation_change);
 
-            // FIXME -- problem when using QVTransforms, only works with opposing
-            // rotation, figure out where maths are wonky!
-            let root_target_rotation = quaternion::rotation_from_to(
-                [0.0, 1.0, 0.0],
-                vec3_normalized(p),
-            );
+                global_poses[middle_bone_index as usize].set_rotation(new_rotation);
+                global_poses[middle_bone_index as usize].set_translation(middle_bone_target);
 
-            target_poses[root_bone_index as usize].set_rotation(root_target_rotation);
-
-            // Get effector bone position in middle joint target space...
-
-            let root_target_global_pose = row_mat4_mul(
-                global_poses[root_bone_parent_index as usize],
-                target_poses[root_bone_index as usize].to_matrix(),
-            );
-
-            let mut m = root_target_global_pose;
-            m[0][3] = middle_bone_target[0];
-            m[1][3] = middle_bone_target[1];
-            m[2][3] = middle_bone_target[2];
-
-            let p = row_mat4_transform(mat4_inv(m), [effector_target_position[0], effector_target_position[1], effector_target_position[2], 1.0]);
-            let p = [p[0], p[1], p[2]];
-
-            let middle_target_rotation = quaternion::rotation_from_to(
-                [0.0, 1.0, 0.0],
-                vec3_normalized(p),
-            );
-
-            target_poses[middle_bone_index as usize].set_rotation(middle_target_rotation);
+                let local_pose = row_mat4_mul(mat4_inv(global_poses[root_bone_index as usize]), global_poses[middle_bone_index as usize]);
+                target_poses[middle_bone_index as usize] = T::from_matrix(local_pose);
+            }
 
             // Blend between input and IK target poses
 

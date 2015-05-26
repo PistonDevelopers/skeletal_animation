@@ -20,7 +20,7 @@ pub type ParamId = String;
 pub enum BlendTreeNodeDef {
     LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
     AdditiveNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
-    IKNode(Box<BlendTreeNodeDef>, String, ParamId, ParamId, ParamId, ParamId),
+    IKNode(Box<BlendTreeNodeDef>, String, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId),
     ClipNode(ClipId),
 }
 
@@ -75,13 +75,20 @@ impl Decodable for BlendTreeNodeDef {
                     let target_y_name = try!(decoder.read_struct_field("target_y_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
                     let target_z_name = try!(decoder.read_struct_field("target_z_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
 
+                    let bend_x_name = try!(decoder.read_struct_field("bend_x_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let bend_y_name = try!(decoder.read_struct_field("bend_y_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let bend_z_name = try!(decoder.read_struct_field("bend_z_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+
 
                     Ok(BlendTreeNodeDef::IKNode(Box::new(input),
                                                 effector_name,
                                                 blend_param_name,
                                                 target_x_name,
                                                 target_y_name,
-                                                target_z_name))
+                                                target_z_name,
+                                                bend_x_name,
+                                                bend_y_name,
+                                                bend_z_name))
 
                 },
                 "ClipNode" => {
@@ -209,7 +216,7 @@ impl<T: Transform> AnimBlendTree<T> {
                 });
                 AnimNodeHandle::AdditiveAnimNodeHandle(self.additive_nodes.len() - 1)
             }
-            BlendTreeNodeDef::IKNode(input, effector_name, blend_param, target_x_param, target_y_param, target_z_param) => {
+            BlendTreeNodeDef::IKNode(input, effector_name, blend_param, target_x_param, target_y_param, target_z_param, bend_x_param, bend_y_param, bend_z_param) => {
                 let input_handle = self.add_node(*input, animations, skeleton);
                 self.ik_nodes.push(IKNode {
                     input: input_handle,
@@ -217,6 +224,9 @@ impl<T: Transform> AnimBlendTree<T> {
                     target_x_param: target_x_param.clone(),
                     target_y_param: target_y_param.clone(),
                     target_z_param: target_z_param.clone(),
+                    bend_x_param: bend_x_param.clone(),
+                    bend_y_param: bend_y_param.clone(),
+                    bend_z_param: bend_z_param.clone(),
                     effector_bone_index: skeleton.get_joint_index(&effector_name).unwrap(),
 
                 });
@@ -338,6 +348,9 @@ pub struct IKNode {
     target_x_param: ParamId,
     target_y_param: ParamId,
     target_z_param: ParamId,
+    bend_x_param: ParamId,
+    bend_y_param: ParamId,
+    bend_z_param: ParamId,
     effector_bone_index: JointIndex,
 }
 
@@ -353,6 +366,7 @@ impl<T: Transform> AnimNode<T> for IKNode {
         let effector_target_position = [params[&self.target_x_param[..]],
                                         params[&self.target_y_param[..]],
                                         params[&self.target_z_param[..]]];
+
 
         let effector_bone_index = self.effector_bone_index;
         let middle_bone_index = tree.skeleton.joints[effector_bone_index as usize].parent_index;
@@ -370,17 +384,30 @@ impl<T: Transform> AnimNode<T> for IKNode {
         let length_1 = vec3_len(vec3_sub(root_bone_position, middle_bone_position));
         let length_2 = vec3_len(vec3_sub(middle_bone_position, effector_bone_position));
 
-        // get effector target position on 2D plane,
+        // get effector target position on a 2D bend plane,
         // with coordinates relative to root bone position
 
-        // x direction of plane
+        // x axis of bend plane
         let root_to_effector = vec3_normalized(vec3_sub(effector_target_position, root_bone_position));
 
-        // Somewhat arbitrary... this will probably usually look OK
-        let plane_normal = vec3_normalized(vec3_cross(vec3_sub(middle_bone_position, root_bone_position),
-                                                      root_to_effector));
+        // z axis of bend plane
+        let plane_normal = {
+            let bend_direction = [params[&self.bend_x_param[..]],
+                                  params[&self.bend_y_param[..]],
+                                  params[&self.bend_z_param[..]]];
+            if vec3_len(bend_direction) == 0.0 {
+                // Choose a somewhat arbitary bend normal:
+                vec3_normalized(vec3_cross(vec3_sub(middle_bone_position, root_bone_position),
+                                           root_to_effector))
+            } else {
+                // Use desired bend direction:
+                let desired_bend_direction = vec3_normalized(bend_direction);
+                vec3_normalized(vec3_cross(desired_bend_direction,
+                                           root_to_effector))
+            }
+        };
 
-        // y direction of plane
+        // y axis of bend plane
         let plane_y_direction = vec3_normalized(vec3_cross(root_to_effector, plane_normal));
 
         let plane_rotation = [

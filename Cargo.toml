@@ -1,38 +1,29 @@
 [package]
 
 name = "skeletal_animation"
-version = "0.0.1"
+version = "0.1.0"
 authors = ["stjahns <s.t.jahns@gmail.com>"]
+keywords = ["animation", "character", "skeletal", "gfx"]
+description = "Skeletal character animation library, using gfx-rs"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/PistonDevelopers/skeletal_animation"
+homepage = "https://github.com/PistonDevelopers/skeletal_animation"
+
+[lib]
+
+name = "skeletal_animation"
+path = "src/lib.rs"
 
 [dependencies]
+
 rustc-serialize = "*"
-
-[dependencies.collada]
-git = "https://github.com/PistonDevelopers/piston_collada"
-
-[dependencies.gfx_debug_draw]
-git = "https://github.com/PistonDevelopers/gfx-debug-draw"
-
-[dependencies.vecmath]
-git = "https://github.com/PistonDevelopers/vecmath"
-
-[dependencies.quaternion]
-git = "https://github.com/PistonDevelopers/quaternion"
-
-[dependencies.dual_quaternion]
-git = "https://github.com/PistonDevelopers/dual_quaternion"
-
-[dependencies.gfx]
-git = "https://github.com/gfx-rs/gfx-rs"
-
-[dependencies.gfx_device_gl]
-git = "https://github.com/gfx-rs/gfx_device_gl"
-
-[dependencies.piston-gfx_texture]
-git = "https://github.com/pistondevelopers/gfx_texture.git"
-
-[dependencies.interpolation]
-git = "https://github.com/pistondevelopers/interpolation.git"
-
-[dependencies.piston-float]
-git = "https://github.com/PistonDevelopers/float"
+collada = "*"
+vecmath = "*"
+quaternion = "*"
+dual_quaternion = "*"
+gfx = "0.6.*"
+piston-gfx_texture = "*"
+interpolation = "*"
+piston-float = "*"
+gfx_debug_draw = "0.3.*"

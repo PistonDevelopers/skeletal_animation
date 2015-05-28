@@ -10,6 +10,9 @@ pub trait Transform: Copy {
     fn to_matrix(self) -> Matrix4<f32>;
     fn from_matrix(Matrix4<f32>) -> Self;
     fn set_rotation(&mut self, rotation: Quaternion<f32>);
+    fn get_rotation(self) -> Quaternion<f32>;
+    fn set_translation(&mut self, translation: Vector3<f32>);
+    fn get_translation(self) -> Vector3<f32>;
 }
 
 /// Transformation represented by separate scaling, translation, and rotation factors.
@@ -39,6 +42,18 @@ impl Transform for QVTransform {
 
     fn set_rotation(&mut self, rotation: Quaternion<f32>) {
         self.rotation = rotation;
+    }
+
+    fn get_rotation(self) -> Quaternion<f32> {
+        self.rotation
+    }
+
+    fn set_translation(&mut self, translation: Vector3<f32>) {
+        self.translation = translation;
+    }
+
+    fn get_translation(self) -> Vector3<f32> {
+        self.translation
     }
 
     fn concat(self, other: QVTransform) -> QVTransform {
@@ -99,6 +114,19 @@ impl Transform for DualQuaternion<f32> {
     fn set_rotation(&mut self, rotation: Quaternion<f32>) {
         let t = dual_quaternion::get_translation(*self);
         *self = dual_quaternion::from_rotation_and_translation(rotation, t);
+    }
+
+    fn get_rotation(self) -> Quaternion<f32> {
+        dual_quaternion::get_rotation(self)
+    }
+
+    fn set_translation(&mut self, translation: Vector3<f32>) {
+        let rotation = dual_quaternion::get_rotation(*self);
+        *self = dual_quaternion::from_rotation_and_translation(rotation, translation);
+    }
+
+    fn get_translation(self) -> Vector3<f32> {
+        dual_quaternion::get_translation(self)
     }
 
     fn concat(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
@@ -167,6 +195,22 @@ impl Transform for Matrix4<f32> {
         self[0][2] = rotation[0][2];
         self[1][2] = rotation[1][2];
         self[2][2] = rotation[2][2];
+    }
+
+    fn get_rotation(self) -> Quaternion<f32> {
+        matrix_to_quaternion(&self)
+    }
+
+    fn set_translation(&mut self, translation: Vector3<f32>) {
+        self[0][3] = translation[0];
+        self[1][3] = translation[1];
+        self[2][3] = translation[2];
+    }
+
+    fn get_translation(self) -> Vector3<f32> {
+        [self[0][3],
+         self[1][3],
+         self[2][3]]
     }
 
     fn concat(self, other: Matrix4<f32>) -> Matrix4<f32> {

@@ -15,13 +15,12 @@ const MAX_JOINTS: usize = 64;
 
 pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
     skinning_transforms_buffer: gfx::handle::Buffer<R, T>,
-    batch: gfx::batch::RefBatch<SkinnedShaderParams<R>>,
+    batch: gfx::batch::Full<SkinnedShaderParams<R>>,
 }
 
 pub struct SkinnedRenderer<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> {
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R, T>>,
-    context: gfx::render::batch::Context<R>,
     factory: F,
 }
 
@@ -86,8 +85,6 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
 
         let mut render_batches = Vec::new();
 
-        let mut context = gfx::render::batch::Context::new();
-
         for (i, object) in obj_set.objects.iter().enumerate().take(6) {
 
             let mut vertex_data: Vec<SkinnedVertex> = Vec::new();
@@ -126,7 +123,9 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
                 _r: PhantomData,
             };
 
-            let batch: gfx::batch::RefBatch<SkinnedShaderParams<R>> = context.make_batch(&program, shader_params, &mesh, slice, &state).unwrap();
+            let mut batch = gfx::batch::Full::new(mesh, program.clone(), shader_params).unwrap();
+            batch.slice = slice;
+            batch.state = state;
 
             render_batches.push(SkinnedRenderBatch {
                 batch: batch,
@@ -138,7 +137,6 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
         Ok(SkinnedRenderer {
             render_batches: render_batches,
             skeleton: skeleton.clone(),
-            context: context,
             factory: factory
         })
     }
@@ -160,7 +158,7 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
             // FIXME -- should all be able to share the same buffer
             self.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
 
-            stream.draw(&(&material.batch, &self.context)).unwrap();
+            stream.draw(&material.batch).unwrap();
         }
     }
 

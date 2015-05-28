@@ -4,7 +4,6 @@ extern crate collada;
 #[macro_use]
 extern crate gfx;
 extern crate gfx_debug_draw;
-extern crate gfx_device_gl;
 extern crate gfx_texture;
 extern crate quaternion;
 extern crate dual_quaternion;

@@ -1,9 +1,9 @@
 [package]
 
 name = "skeletal_animation"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["stjahns <s.t.jahns@gmail.com>"]
-keywords = ["animation", "character", "skeletal", "gfx"]
+keywords = ["animation", "character", "skeletal", "gfx", "piston"]
 description = "Skeletal character animation library, using gfx-rs"
 license = "MIT"
 readme = "README.md"
@@ -18,12 +18,12 @@ path = "src/lib.rs"
 [dependencies]
 
 rustc-serialize = "*"
-collada = "*"
-vecmath = "*"
-quaternion = "*"
-dual_quaternion = "*"
+collada = "0.1.0"
+vecmath = "0.1.1"
+quaternion = "0.1.0"
+dual_quaternion = "0.1.0"
 gfx = "0.6.*"
-piston-gfx_texture = "*"
-interpolation = "*"
-piston-float = "*"
+piston-gfx_texture = "0.2.0"
+interpolation = "0.1.0"
+piston-float = "0.1.0"
 gfx_debug_draw = "0.3.*"

@@ -105,7 +105,8 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
             let texture = gfx_texture::Texture::from_path(
                 &mut factory,
                 &Path::new(&texture_paths[i]),
-                &gfx_texture::Settings::new()
+                gfx_texture::Flip::None,
+                &gfx_texture::TextureSettings::new()
             ).unwrap();
 
             let sampler = factory.create_sampler(
@@ -156,7 +157,7 @@ impl<'a, R: gfx::Resources, F: gfx::Factory<R>, T: Transform + HasShaderSources<
             material.batch.params.u_model_view_proj = projection;
 
             // FIXME -- should all be able to share the same buffer
-            self.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0);
+            self.factory.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0).unwrap();
 
             stream.draw(&material.batch).unwrap();
         }

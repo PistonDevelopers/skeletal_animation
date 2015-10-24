@@ -108,7 +108,7 @@ impl<T: Transform> AnimationClip<T> {
         let sample_2 = &self.samples[index_2];
 
 
-        for i in (0 .. sample_1.local_poses.len()) {
+        for i in 0 .. sample_1.local_poses.len() {
 
             let pose_1 = sample_1.local_poses[i];
             let pose_2 = sample_2.local_poses[i];

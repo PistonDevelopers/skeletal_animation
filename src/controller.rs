@@ -135,7 +135,7 @@ impl Decodable for AnimationStateDef {
             let transitions = try!(decoder.read_struct_field("transitions", 0, |decoder| {
                 decoder.read_seq(|decoder, len| {
                     let mut transitions = Vec::new();
-                    for i in (0 .. len) {
+                    for i in 0 .. len {
                         transitions.push(try!(decoder.read_seq_elt(i, Decodable::decode)));
                     }
                     Ok(transitions)
@@ -295,7 +295,7 @@ impl<T: Transform> AnimationController<T> {
 
             let blend_parameter = ((self.local_clock + ext_dt - transition_start_time) / transition.duration as f64) as f32;
 
-            for i in (0 .. output_poses.len()) {
+            for i in 0 .. output_poses.len() {
                 let pose_1 = &mut local_poses[i];
                 let pose_2 = target_poses[i];
                 *pose_1 = pose_1.lerp(pose_2, blend_parameter);

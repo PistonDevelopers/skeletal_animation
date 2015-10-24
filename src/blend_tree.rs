@@ -290,7 +290,7 @@ impl<T: Transform> AnimNode<T> for LerpAnimNode {
             node.get_output_pose(tree, time, params, output_poses);
         }
 
-        for i in (0 .. output_poses.len()) {
+        for i in 0 .. output_poses.len() {
             let pose_1 = input_poses[i];
             let pose_2 = &mut output_poses[i];
             (*pose_2) = pose_1.lerp(pose_2.clone(), blend_parameter);
@@ -322,7 +322,7 @@ impl<T: Transform> AnimNode<T> for AdditiveAnimNode {
             node.get_output_pose(tree, time, params, output_poses);
         }
 
-        for i in (0 .. output_poses.len()) {
+        for i in 0 .. output_poses.len() {
             let pose_1 = input_poses[i];
             let pose_2 = &mut output_poses[i];
             let additive_pose = T::identity().lerp(pose_2.clone(), blend_parameter);
@@ -425,7 +425,7 @@ impl<T: Transform> AnimNode<T> for IKNode {
 
             // Copy input poses into IK target poses
             let mut target_poses = [ T::identity(); 64 ];
-            for i in (0 .. 64) {
+            for i in 0 .. 64 {
                 target_poses[i] = output_poses[i];
             }
 
@@ -467,7 +467,7 @@ impl<T: Transform> AnimNode<T> for IKNode {
             // Blend between input and IK target poses
 
             let blend_parameter = params[&self.blend_param[..]];
-            for i in (0 .. output_poses.len()) {
+            for i in 0 .. output_poses.len() {
                 let ik_pose = target_poses[i];
                 let output_pose = &mut output_poses[i];
                 (*output_pose) = output_pose.lerp(ik_pose.clone(), blend_parameter);

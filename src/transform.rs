@@ -1,4 +1,4 @@
-use interpolation::{self, Spatial};
+use interpolation;
 use math::*;
 
 pub trait Transform: Copy {

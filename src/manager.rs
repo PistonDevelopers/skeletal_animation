@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
 
-use rustc_serialize::{Decodable, Decoder, json};
+use rustc_serialize::{Decodable, json};
 
 use animation::{AnimationClip, AnimationClipDef, DifferenceClipDef};
 use transform::Transform;

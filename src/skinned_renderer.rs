@@ -17,11 +17,11 @@ pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
     skinning_transforms_buffer: gfx::handle::Buffer<R, T>,
     slice: gfx::Slice<R>,
     vertex_buffer: gfx::handle::Buffer<R, SkinnedVertex>,
-    pso: gfx::PipelineState<R, pipe::Meta>,
     texture: (gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::Sampler<R>),
 }
 
 pub struct SkinnedRenderer<R: gfx::Resources, T: Transform> {
+    pso: gfx::PipelineState<R, pipe::Meta>,
     skeleton: Skeleton, // TODO Should this be a ref? Should this just be the joints?
     render_batches: Vec<SkinnedRenderBatch<R, T>>,
 }
@@ -67,6 +67,31 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             }
         };
 
+        // TODO: Pass in format as parameter.
+        let format = gfx::format::Srgba8::get_format();
+        let init = pipe::Init {
+            vertex: (),
+            u_model_view_proj: "u_model_view_proj",
+            u_model_view: "u_model_view",
+            u_skinning_transforms: "u_skinning_transforms",
+            u_texture: "u_texture",
+            out_color: ("out_color", format, gfx::state::MASK_ALL, Some(gfx::preset::blend::ALPHA)),
+            out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
+        };
+        let pso = factory.create_pipeline_from_program(
+            &program,
+            gfx::Primitive::LineList,
+            gfx::state::Rasterizer::new_fill(),
+            init
+        ).unwrap();
+
+        let sampler = factory.create_sampler(
+            gfx::tex::SamplerInfo::new(
+                gfx::tex::FilterMethod::Trilinear,
+                gfx::tex::WrapMode::Clamp
+            )
+        );
+
         let obj_set = collada_document.get_obj_set().unwrap();
 
         let skeleton_set = collada_document.get_skeletons().unwrap();
@@ -84,15 +109,6 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice
                 (&vertex_data, &index_data[..]);
 
-            // let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
-
-            /*
-            let slice = factory
-                .create_buffer_const::<u32>(&index_data[..], gfx::BufferRole::Index)
-                .unwrap()
-                .to_slice(gfx::PrimitiveType::TriangleList);
-            */
-
             let skinning_transforms_buffer = factory.create_buffer_dynamic::<T>(
                 MAX_JOINTS, gfx::BufferRole::Uniform, gfx::Bind::empty()).unwrap();
 
@@ -103,48 +119,17 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
                 &gfx_texture::TextureSettings::new()
             ).unwrap();
 
-            let sampler = factory.create_sampler(
-                gfx::tex::SamplerInfo::new(
-                    gfx::tex::FilterMethod::Trilinear,
-                    gfx::tex::WrapMode::Clamp
-                )
-            );
-
-            /*
-            let mut batch = gfx::batch::Full::new(mesh, program.clone(), shader_params).unwrap();
-            batch.slice = slice;
-            batch.state = state;
-            */
-
-            // TODO: Pass in format as parameter.
-            let format = gfx::format::Srgba8::get_format();
-            let init = pipe::Init {
-                vertex: (),
-                u_model_view_proj: "u_model_view_proj",
-                u_model_view: "u_model_view",
-                u_skinning_transforms: "u_skinning_transforms",
-                u_texture: "u_texture",
-                out_color: ("out_color", format, gfx::state::MASK_ALL, Some(gfx::preset::blend::ALPHA)),
-                out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
-            };
-            let pso = factory.create_pipeline_from_program(
-                &program,
-                gfx::Primitive::LineList,
-                gfx::state::Rasterizer::new_fill(),
-                init
-            ).unwrap();
-
             render_batches.push(SkinnedRenderBatch {
-                pso: pso,
                 slice: slice,
                 vertex_buffer: vbuf,
                 skinning_transforms_buffer: skinning_transforms_buffer,
-                texture: (texture.view.clone(), sampler),
+                texture: (texture.view.clone(), sampler.clone()),
             });
         }
 
 
         Ok(SkinnedRenderer {
+            pso: pso,
             render_batches: render_batches,
             skeleton: skeleton.clone(),
         })
@@ -176,7 +161,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
                 out_depth: out_depth.clone(),
             };
 
-            encoder.draw(&material.slice, &material.pso, &data);
+            encoder.draw(&material.slice, &self.pso, &data);
         }
     }
 

@@ -75,12 +75,12 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             u_model_view: "u_model_view",
             u_skinning_transforms: "u_skinning_transforms",
             u_texture: "u_texture",
-            out_color: ("out_color", format, gfx::state::MASK_ALL, Some(gfx::preset::blend::ALPHA)),
+            out_color: ("out_color", format, gfx::state::MASK_ALL, None),
             out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
         };
         let pso = factory.create_pipeline_from_program(
             &program,
-            gfx::Primitive::LineList,
+            gfx::Primitive::TriangleList,
             gfx::state::Rasterizer::new_fill(),
             init
         ).unwrap();

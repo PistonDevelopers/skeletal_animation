@@ -16,6 +16,7 @@ const MAX_JOINTS: usize = 64;
 pub struct SkinnedRenderBatch<R: gfx::Resources, T: Transform> {
     skinning_transforms_buffer: gfx::handle::Buffer<R, T>,
     slice: gfx::Slice<R>,
+    vertex_buffer: gfx::handle::Buffer<R, SkinnedVertex>,
     pso: gfx::PipelineState<R, pipe::Meta>,
     texture: (gfx::handle::ShaderResourceView<R, [f32; 4]>, gfx::handle::Sampler<R>),
 }
@@ -80,7 +81,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let (_mesh, slice) = factory.create_vertex_buffer_with_slice
+            let (vbuf, slice) = factory.create_vertex_buffer_with_slice
                 (&vertex_data, &index_data[..]);
 
             // let state = gfx::DrawState::new().depth(gfx::state::Comparison::LessEqual, true);
@@ -118,11 +119,12 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             // TODO: Pass in format as parameter.
             let format = gfx::format::Srgba8::get_format();
             let init = pipe::Init {
+                vertex: (),
                 u_model_view_proj: "u_model_view_proj",
                 u_model_view: "u_model_view",
-                u_skinning_transforms: &[],
+                u_skinning_transforms: "u_skinning_transforms",
                 u_texture: "u_texture",
-                out_color: ("o_Color", format, gfx::state::MASK_ALL, Some(gfx::preset::blend::ALPHA)),
+                out_color: ("out_color", format, gfx::state::MASK_ALL, Some(gfx::preset::blend::ALPHA)),
                 out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
             };
             let pso = factory.create_pipeline_from_program(
@@ -135,6 +137,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             render_batches.push(SkinnedRenderBatch {
                 pso: pso,
                 slice: slice,
+                vertex_buffer: vbuf,
                 skinning_transforms_buffer: skinning_transforms_buffer,
                 texture: (texture.view.clone(), sampler),
             });
@@ -164,6 +167,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             encoder.update_buffer(&material.skinning_transforms_buffer, &skinning_transforms[..], 0).unwrap();
 
             let data = pipe::Data {
+                vertex: material.vertex_buffer.clone(),
                 u_model_view_proj: projection,
                 u_model_view: view,
                 u_skinning_transforms: material.skinning_transforms_buffer.raw().clone(),
@@ -188,9 +192,10 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 }
 
 gfx_pipeline_base!( pipe {
+    vertex: gfx::VertexBuffer<SkinnedVertex>,
     u_model_view_proj: gfx::Global<[[f32; 4]; 4]>,
     u_model_view: gfx::Global<[[f32; 4]; 4]>,
-    u_skinning_transforms: gfx::RawVertexBuffer,
+    u_skinning_transforms: gfx::RawConstantBuffer,
     u_texture: gfx::TextureSampler<[f32; 4]>,
     out_color: gfx::RawRenderTarget,
     out_depth: gfx::DepthTarget<gfx::format::DepthStencil>,

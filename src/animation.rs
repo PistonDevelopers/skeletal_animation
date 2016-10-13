@@ -62,7 +62,7 @@ impl<T: Transform> AnimationClip<T> {
 
         // FIXME - load skeleton separately?
         let collada_document = ColladaDocument::from_path(&Path::new(&clip_def.source[..])).unwrap();
-        let animations = collada_document.get_animations();
+        let animations = collada_document.get_animations().unwrap();
         let skeleton_set = collada_document.get_skeletons().unwrap();
         let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 

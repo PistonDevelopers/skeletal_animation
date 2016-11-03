@@ -177,13 +177,13 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 }
 
 gfx_pipeline_base!( pipe {
-    vertex: gfx::VertexBuffer<SkinnedVertex>,
-    u_model_view_proj: gfx::Global<[[f32; 4]; 4]>,
-    u_model_view: gfx::Global<[[f32; 4]; 4]>,
-    u_skinning_transforms: gfx::RawConstantBuffer,
-    u_texture: gfx::TextureSampler<[f32; 4]>,
-    out_color: gfx::RawRenderTarget,
-    out_depth: gfx::DepthTarget<gfx::format::DepthStencil>,
+    vertex: ::gfx::VertexBuffer<SkinnedVertex>,
+    u_model_view_proj: ::gfx::Global<[[f32; 4]; 4]>,
+    u_model_view: ::gfx::Global<[[f32; 4]; 4]>,
+    u_skinning_transforms: ::gfx::RawConstantBuffer,
+    u_texture: ::gfx::TextureSampler<[f32; 4]>,
+    out_color: ::gfx::RawRenderTarget,
+    out_depth: ::gfx::DepthTarget<::gfx::format::DepthStencil>,
 });
 
 /*

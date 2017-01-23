@@ -3,7 +3,7 @@ use std::path::Path;
 
 use collada;
 use gfx;
-use gfx::Typed;
+use gfx::memory::Typed;
 use gfx::traits::*;
 use gfx_texture;
 
@@ -86,9 +86,9 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
         ).unwrap();
 
         let sampler = factory.create_sampler(
-            gfx::tex::SamplerInfo::new(
-                gfx::tex::FilterMethod::Trilinear,
-                gfx::tex::WrapMode::Clamp
+            gfx::texture::SamplerInfo::new(
+                gfx::texture::FilterMethod::Trilinear,
+                gfx::texture::WrapMode::Clamp
             )
         );
 
@@ -109,8 +109,12 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             let (vbuf, slice) = factory.create_vertex_buffer_with_slice
                 (&vertex_data, &index_data[..]);
 
-            let skinning_transforms_buffer = factory.create_buffer_dynamic::<T>(
-                MAX_JOINTS, gfx::BufferRole::Uniform, gfx::Bind::empty()).unwrap();
+            let skinning_transforms_buffer = factory.create_buffer::<T>(
+                MAX_JOINTS,
+                gfx::buffer::Role::Constant,
+                gfx::memory::Usage::Dynamic,
+                gfx::Bind::empty()
+            ).unwrap();
 
             let texture = gfx_texture::Texture::from_path(
                 factory,
@@ -143,7 +147,9 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
         view: [[f32; 4]; 4],
         projection: [[f32; 4]; 4],
         joint_poses: &[T]
-    ) {
+    )
+        where T: gfx::traits::Pod
+    {
 
         let skinning_transforms = self.calculate_skinning_transforms(&joint_poses);
 
@@ -177,13 +183,13 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 }
 
 gfx_pipeline_base!( pipe {
-    vertex: ::gfx::VertexBuffer<SkinnedVertex>,
-    u_model_view_proj: ::gfx::Global<[[f32; 4]; 4]>,
-    u_model_view: ::gfx::Global<[[f32; 4]; 4]>,
-    u_skinning_transforms: ::gfx::RawConstantBuffer,
-    u_texture: ::gfx::TextureSampler<[f32; 4]>,
-    out_color: ::gfx::RawRenderTarget,
-    out_depth: ::gfx::DepthTarget<::gfx::format::DepthStencil>,
+    vertex: gfx::VertexBuffer<SkinnedVertex>,
+    u_model_view_proj: gfx::Global<[[f32; 4]; 4]>,
+    u_model_view: gfx::Global<[[f32; 4]; 4]>,
+    u_skinning_transforms: gfx::RawConstantBuffer,
+    u_texture: gfx::TextureSampler<[f32; 4]>,
+    out_color: gfx::RawRenderTarget,
+    out_depth: gfx::DepthTarget<gfx::format::DepthStencil>,
 });
 
 /*

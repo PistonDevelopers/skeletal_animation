@@ -75,7 +75,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             u_model_view: "u_model_view",
             u_skinning_transforms: "u_skinning_transforms",
             u_texture: "u_texture",
-            out_color: ("out_color", format, gfx::state::MASK_ALL, None),
+            out_color: ("out_color", format, gfx::state::ColorMask::all(), None),
             out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
         };
         let pso = factory.create_pipeline_from_program(
@@ -113,7 +113,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
                 MAX_JOINTS,
                 gfx::buffer::Role::Constant,
                 gfx::memory::Usage::Dynamic,
-                gfx::Bind::empty()
+                gfx::memory::Bind::empty()
             ).unwrap();
 
             let texture = gfx_texture::Texture::from_path(

@@ -269,12 +269,14 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
                 index_data.push(i);
                 i += 1;
             };
-            for shape in geom.shapes.iter() {
-                match shape {
-                    &collada::Shape::Triangle(a, b, c) => {
-                        add(a);
-                        add(b);
-                        add(c);
+            for mesh in geom.mesh.iter() {
+                match mesh {
+                    &collada::PrimitiveElement::Triangles(ref triangles) => {
+                        for &(a, b, c) in &triangles.vertices {
+                            add(a);
+                            add(b);
+                            add(c);
+                        }
                     }
                     _ => {}
                 }

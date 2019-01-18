@@ -278,7 +278,18 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
                             add(c);
                         }
                     }
-                    _ => {}
+                    &collada::PrimitiveElement::Polylist(ref polylist) => {
+                        for shape in &polylist.shapes {
+                            match shape {
+                                &collada::Shape::Triangle(a, b, c) => {
+                                    add(a);
+                                    add(b);
+                                    add(c);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 }
             }
         }

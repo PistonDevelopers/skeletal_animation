@@ -17,8 +17,7 @@ pub trait Transform: Copy {
 
 /// Transformation represented by separate scaling, translation, and rotation factors.
 #[derive(Debug, Copy, Clone)]
-pub struct QVTransform
-{
+pub struct QVTransform {
     /// Translation
     pub translation: Vector3<f32>,
 
@@ -27,7 +26,6 @@ pub struct QVTransform
 
     /// Rotation
     pub rotation: Quaternion<f32>
-
 }
 
 impl Transform for QVTransform {

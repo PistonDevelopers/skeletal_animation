@@ -136,7 +136,7 @@ impl<T: Transform> AnimationClip<T> {
 
         Self {
             samples_per_second: source_clip.samples_per_second,
-            samples: samples,
+            samples,
         }
     }
 
@@ -202,10 +202,7 @@ impl<T: Transform> AnimationClip<T> {
             }
         }).collect();
 
-        Self {
-            samples_per_second: samples_per_second,
-            samples: samples,
-        }
+        Self { samples_per_second, samples }
     }
 
 }

@@ -32,8 +32,8 @@ pub struct QVTransform
 
 impl Transform for QVTransform {
 
-    fn identity() -> QVTransform {
-        QVTransform {
+    fn identity() -> Self {
+        Self {
             translation: [0.0, 0.0, 0.0],
             scale: 1.0,
             rotation: quaternion_id(),
@@ -56,16 +56,16 @@ impl Transform for QVTransform {
         self.translation
     }
 
-    fn concat(self, other: QVTransform) -> QVTransform {
-        QVTransform::from_matrix(self.to_matrix().concat(other.to_matrix()))
+    fn concat(self, other: Self) -> Self {
+        Self::from_matrix(self.to_matrix().concat(other.to_matrix()))
     }
 
-    fn inverse(self) -> QVTransform {
-        QVTransform::from_matrix(self.to_matrix().inverse())
+    fn inverse(self) -> Self {
+        Self::from_matrix(self.to_matrix().inverse())
     }
 
-    fn lerp(self, other: QVTransform, parameter: f32) -> QVTransform {
-        QVTransform {
+    fn lerp(self, other: Self, parameter: f32) -> Self {
+        Self {
             translation: interpolation::lerp(&self.translation, &other.translation, &parameter),
             scale: interpolation::lerp(&self.scale, &other.scale, &parameter),
             rotation: lerp_quaternion(&self.rotation, &other.rotation, &parameter),
@@ -88,7 +88,7 @@ impl Transform for QVTransform {
         m
     }
 
-    fn from_matrix(m: Matrix4<f32>) -> QVTransform {
+    fn from_matrix(m: Matrix4<f32>) -> Self {
 
         let rotation = matrix_to_quaternion(&m);
 
@@ -96,7 +96,7 @@ impl Transform for QVTransform {
                            m[1][3],
                            m[2][3]];
 
-        QVTransform {
+        Self {
             rotation: rotation,
             scale: 1.0,
             translation: translation,
@@ -107,7 +107,7 @@ impl Transform for QVTransform {
 
 impl Transform for DualQuaternion<f32> {
 
-    fn identity() -> DualQuaternion<f32> {
+    fn identity() -> Self {
         dual_quaternion::id()
     }
 
@@ -129,15 +129,15 @@ impl Transform for DualQuaternion<f32> {
         dual_quaternion::get_translation(self)
     }
 
-    fn concat(self, other: DualQuaternion<f32>) -> DualQuaternion<f32> {
+    fn concat(self, other: Self) -> Self {
         dual_quaternion::mul(self, other)
     }
 
-    fn inverse(self) -> DualQuaternion<f32> {
+    fn inverse(self) -> Self {
         dual_quaternion::conj(self)
     }
 
-    fn lerp(self, other: DualQuaternion<f32>, parameter: f32) -> DualQuaternion<f32> {
+    fn lerp(self, other: Self, parameter: f32) -> Self {
         lerp_dual_quaternion(self, other, parameter)
     }
 
@@ -161,7 +161,7 @@ impl Transform for DualQuaternion<f32> {
         m
     }
 
-    fn from_matrix(m: Matrix4<f32>) -> DualQuaternion<f32> {
+    fn from_matrix(m: Matrix4<f32>) -> Self {
 
         let rotation = matrix_to_quaternion(&mat4_transposed(m));
 
@@ -242,7 +242,7 @@ pub trait FromTransform<T: Transform> {
 }
 
 impl FromTransform<DualQuaternion<f32>> for DualQuaternion<f32> {
-    fn from_transform(t: DualQuaternion<f32>) -> DualQuaternion<f32> { t }
+    fn from_transform(t: Self) -> Self { t }
 }
 
 impl<T: Transform> FromTransform<T> for Matrix4<f32> {

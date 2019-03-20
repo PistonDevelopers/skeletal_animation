@@ -27,8 +27,8 @@ pub struct AssetManager<T: Transform> {
 
 impl<T: Transform> AssetManager<T> {
 
-    pub fn new() -> AssetManager<T> {
-        AssetManager {
+    pub fn new() -> Self {
+        Self {
             animation_clips: HashMap::new(),
             controller_defs: HashMap::new(),
         }

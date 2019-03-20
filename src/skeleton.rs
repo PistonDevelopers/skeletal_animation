@@ -21,8 +21,8 @@ impl Skeleton {
     ///
     /// Build a skeleton fromm a Collada skeleton
     ///
-    pub fn from_collada(skeleton: &collada::Skeleton) -> Skeleton {
-        Skeleton {
+    pub fn from_collada(skeleton: &collada::Skeleton) -> Self {
+        Self {
             joints: skeleton.joints.iter().map(|j| {
                 Joint {
                     name: j.name.clone(),
@@ -53,14 +53,7 @@ impl Skeleton {
     }
 
     pub fn get_joint_index(&self, joint_name: &str) -> Option<JointIndex> {
-
-        for (index, joint) in self.joints.iter().enumerate() {
-            if joint.name == joint_name {
-                return Some(index as JointIndex);
-            }
-        }
-
-        None
+        self.joints.iter().enumerate().find(|(_, joint)| joint.name == joint_name).map(|(index, _)| index as JointIndex)
     }
 
     pub fn draw<R: gfx::Resources, F: gfx::Factory<R>, T: Transform> (

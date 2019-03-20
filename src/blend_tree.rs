@@ -18,14 +18,14 @@ pub type ParamId = String;
 /// Definition of a blend tree, used by AnimationController to construct an AnimBlendTree
 #[derive(Debug, Clone)]
 pub enum BlendTreeNodeDef {
-    LerpNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
-    AdditiveNode(Box<BlendTreeNodeDef>, Box<BlendTreeNodeDef>, ParamId),
-    IKNode(Box<BlendTreeNodeDef>, String, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId),
+    LerpNode(Box<Self>, Box<Self>, ParamId),
+    AdditiveNode(Box<Self>, Box<Self>, ParamId),
+    IKNode(Box<Self>, String, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId, ParamId),
     ClipNode(ClipId),
 }
 
 impl Decodable for BlendTreeNodeDef {
-    fn decode<D: Decoder>(decoder: &mut D) -> Result<BlendTreeNodeDef, D::Error> {
+    fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, D::Error> {
         decoder.read_struct("root", 0, |decoder| {
 
             let node_type = try!(decoder.read_struct_field("type", 0, |decoder| { Ok(try!(decoder.read_str())) }));
@@ -124,9 +124,9 @@ impl<T: Transform> AnimBlendTree<T> {
         def: BlendTreeNodeDef,
         animations: &HashMap<ClipId, Rc<AnimationClip<T>>>,
         skeleton: Rc<Skeleton>,
-    ) -> AnimBlendTree<T> {
+    ) -> Self {
 
-        let mut tree = AnimBlendTree {
+        let mut tree = Self {
             root_node: AnimNodeHandle::None,
             lerp_nodes: Vec::new(),
             additive_nodes: Vec::new(),

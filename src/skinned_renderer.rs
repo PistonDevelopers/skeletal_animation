@@ -124,9 +124,9 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             ).unwrap();
 
             render_batches.push(SkinnedRenderBatch {
-                slice: slice,
+                slice,
                 vertex_buffer: vbuf,
-                skinning_transforms_buffer: skinning_transforms_buffer,
+                skinning_transforms_buffer,
                 texture: (texture.view.clone(), sampler.clone()),
             });
         }

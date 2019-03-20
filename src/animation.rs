@@ -12,9 +12,7 @@ use transform::Transform;
 
 /// A single skeletal pose
 #[derive(Debug)]
-pub struct AnimationSample<T: Transform>
-{
-
+pub struct AnimationSample<T: Transform> {
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
     pub local_poses: Vec<T>,
@@ -24,13 +22,11 @@ pub struct AnimationSample<T: Transform>
 /// A sequence of skeletal pose samples at some sample rate
 #[derive(Debug)]
 pub struct AnimationClip<T: Transform> {
-
     /// The sequence of skeletal poses
     pub samples: Vec<AnimationSample<T>>,
 
     /// Sample rate for the clip. Assumes a constant sample rate.
     pub samples_per_second: f32,
-
 }
 
 #[derive(Debug, RustcDecodable)]
@@ -132,7 +128,7 @@ impl<T: Transform> AnimationClip<T> {
                 reference_pose.inverse().concat(source_pose)
             }).collect();
 
-            AnimationSample {
+            Self {
                 local_poses: difference_poses,
             }
 

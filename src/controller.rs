@@ -196,7 +196,7 @@ impl<T: Transform> AnimationController<T> {
             blend_tree.synchronize(0.0, &parameters);
 
             states.insert(state_def.name.clone(), AnimationState {
-                blend_tree: blend_tree,
+                blend_tree,
                 transitions: state_def.transitions.clone()
             });
 

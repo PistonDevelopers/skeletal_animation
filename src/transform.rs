@@ -176,7 +176,7 @@ impl Transform for DualQuaternion<f32> {
 
 impl Transform for Matrix4<f32> {
 
-    fn identity() -> Matrix4<f32> {
+    fn identity() -> Self {
         mat4_id()
     }
 
@@ -213,15 +213,15 @@ impl Transform for Matrix4<f32> {
          self[2][3]]
     }
 
-    fn concat(self, other: Matrix4<f32>) -> Matrix4<f32> {
+    fn concat(self, other: Self) -> Self {
         row_mat4_mul(self, other)
     }
 
-    fn inverse(self) -> Matrix4<f32> {
+    fn inverse(self) -> Self {
         mat4_inv(self)
     }
 
-    fn lerp(self, other: Matrix4<f32>, parameter: f32) -> Matrix4<f32> {
+    fn lerp(self, other: Self, parameter: f32) -> Self {
         let q1 = DualQuaternion::from_matrix(self);
         let q2 = DualQuaternion::from_matrix(other);
         q1.lerp(q2, parameter).to_matrix()
@@ -232,9 +232,9 @@ impl Transform for Matrix4<f32> {
         [t[0], t[1], t[2]]
     }
 
-    fn to_matrix(self) -> Matrix4<f32> { self }
+    fn to_matrix(self) -> Self { self }
 
-    fn from_matrix(m: Matrix4<f32>) -> Matrix4<f32> { m }
+    fn from_matrix(m: Self) -> Self { m }
 }
 
 pub trait FromTransform<T: Transform> {
@@ -246,7 +246,7 @@ impl FromTransform<DualQuaternion<f32>> for DualQuaternion<f32> {
 }
 
 impl<T: Transform> FromTransform<T> for Matrix4<f32> {
-    fn from_transform(t: T) -> Matrix4<f32> {
+    fn from_transform(t: T) -> Self {
         t.to_matrix()
     }
 }

@@ -162,7 +162,6 @@ impl Transform for DualQuaternion<f32> {
     }
 
     fn from_matrix(m: Matrix4<f32>) -> Self {
-
         let rotation = matrix_to_quaternion(&mat4_transposed(m));
 
         let translation = [m[0][3],
@@ -170,7 +169,6 @@ impl Transform for DualQuaternion<f32> {
                            m[2][3]];
 
         dual_quaternion::from_rotation_and_translation(rotation, translation)
-
     }
 }
 

@@ -72,7 +72,6 @@ impl<T: Transform> AnimationClip<T> {
             clip.set_duration(clip_def.duration);
         }
         clip
-
     }
 
     /// Overrides the sampling rate of the clip to give the given duration (in seconds).
@@ -115,7 +114,6 @@ impl<T: Transform> AnimationClip<T> {
             let blended_pose = &mut blended_poses[i];
             *blended_pose = pose_1.lerp(pose_2, blend_factor);
         }
-
     }
 
     /// Create a difference clip from a source and reference clip for additive blending.

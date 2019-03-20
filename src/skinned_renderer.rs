@@ -131,10 +131,9 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             });
         }
 
-
         Ok(Self {
-            pso: pso,
-            render_batches: render_batches,
+            pso,
+            render_batches,
             skeleton: skeleton.clone(),
         })
     }

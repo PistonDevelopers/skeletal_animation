@@ -7,6 +7,8 @@ use gfx::memory::Typed;
 use gfx::traits::*;
 use gfx_texture;
 
+use gfx_texture::TextureContext;
+
 use math::*;
 use skeleton::Skeleton;
 use transform::Transform;
@@ -51,8 +53,8 @@ impl<'a> HasShaderSources<'a> for DualQuaternion<f32> {
 
 impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer<R, T> {
 
-    pub fn from_collada<F: gfx::Factory<R>>(
-        factory: &mut F,
+    pub fn from_collada<F: gfx::Factory<R>, C: gfx::CommandBuffer<R>>(
+        tcx: &mut TextureContext<F, R, C>,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
     ) -> Result<SkinnedRenderer<R, T>, gfx::shade::ProgramError> {
@@ -61,7 +63,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
         let program = {
             let vs = T::vertex_shader_source();
             let fs = T::fragment_shader_source();
-            match factory.link_program(vs, fs) {
+            match tcx.factory.link_program(vs, fs) {
                 Ok(program_handle) => program_handle,
                 Err(e) => return Err(e),
             }
@@ -78,14 +80,14 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             out_color: ("out_color", format, gfx::state::ColorMask::all(), None),
             out_depth: gfx::preset::depth::LESS_EQUAL_WRITE,
         };
-        let pso = factory.create_pipeline_from_program(
+        let pso = tcx.factory.create_pipeline_from_program(
             &program,
             gfx::Primitive::TriangleList,
             gfx::state::Rasterizer::new_fill(),
             init
         ).unwrap();
 
-        let sampler = factory.create_sampler(
+        let sampler = tcx.factory.create_sampler(
             gfx::texture::SamplerInfo::new(
                 gfx::texture::FilterMethod::Trilinear,
                 gfx::texture::WrapMode::Clamp
@@ -106,10 +108,10 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
 
             get_vertex_index_data(&object, &mut vertex_data, &mut index_data);
 
-            let (vbuf, slice) = factory.create_vertex_buffer_with_slice
+            let (vbuf, slice) = tcx.factory.create_vertex_buffer_with_slice
                 (&vertex_data, &index_data[..]);
 
-            let skinning_transforms_buffer = factory.create_buffer::<T>(
+            let skinning_transforms_buffer = tcx.factory.create_buffer::<T>(
                 MAX_JOINTS,
                 gfx::buffer::Role::Constant,
                 gfx::memory::Usage::Dynamic,
@@ -117,7 +119,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             ).unwrap();
 
             let texture = gfx_texture::Texture::from_path(
-                factory,
+                tcx,
                 &Path::new(&texture_paths[i]),
                 gfx_texture::Flip::None,
                 &gfx_texture::TextureSettings::new()

@@ -274,10 +274,22 @@ fn get_vertex_index_data(obj: &collada::Object, vertex_data: &mut Vec<SkinnedVer
             for mesh in geom.mesh.iter() {
                 match mesh {
                     &collada::PrimitiveElement::Triangles(ref triangles) => {
-                        for &(a, b, c) in &triangles.vertices {
-                            add(a);
-                            add(b);
-                            add(c);
+                        for j in 0..triangles.vertices.len() {
+                            add((
+                                triangles.vertices[j].0,
+                                triangles.tex_vertices.as_ref().map(|te| te[j].0),
+                                triangles.normals.as_ref().map(|no| no[j].0)
+                            ));
+                            add((
+                                triangles.vertices[j].1,
+                                triangles.tex_vertices.as_ref().map(|te| te[j].1),
+                                triangles.normals.as_ref().map(|no| no[j].1)
+                            ));
+                            add((
+                                triangles.vertices[j].2,
+                                triangles.tex_vertices.as_ref().map(|te| te[j].2),
+                                triangles.normals.as_ref().map(|no| no[j].2)
+                            ));
                         }
                     }
                     &collada::PrimitiveElement::Polylist(ref polylist) => {

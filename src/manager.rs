@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
+use std::path::Path;
+use std::{fmt, error};
 
 use rustc_serialize::{Decodable, json};
 
@@ -25,6 +27,21 @@ pub struct AssetManager<T: Transform> {
     pub controller_defs: HashMap<String, AnimationControllerDef>
 }
 
+/// Created when attempting to load assets from a path that does not have a parent folder (see
+/// [`Path::parent` documentation][0])
+///
+/// [0]: https://doc.rust-lang.org/std/path/struct.Path.html#method.parent
+#[derive(Debug)]
+pub struct InvalidAssetPathError;
+
+impl fmt::Display for InvalidAssetPathError {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(fmt, "Asset path must have a parent folder")
+    }
+}
+
+impl error::Error for InvalidAssetPathError {}
+
 impl<T: Transform> AssetManager<T> {
 
     pub fn new() -> AssetManager<T> {
@@ -34,13 +51,14 @@ impl<T: Transform> AssetManager<T> {
         }
     }
 
-    pub fn load_assets(&mut self, path: &str) {
+    pub fn load_assets(&mut self, path: &str) -> Result<(), InvalidAssetPathError> {
 
         let asset_defs: AssetDefs = AssetManager::<T>::load_def_from_path(path).unwrap();
+        let parent_path = Path::new(path).parent().ok_or(InvalidAssetPathError)?;
 
         if let Some(animation_clips) = asset_defs.animation_clips {
             for clip_def in animation_clips.iter() {
-                let clip = AnimationClip::from_def(clip_def);
+                let clip = AnimationClip::from_def(clip_def, parent_path.to_owned());
                 self.animation_clips.insert(clip_def.name.clone(), Rc::new(clip));
             }
         }
@@ -63,6 +81,8 @@ impl<T: Transform> AssetManager<T> {
                 self.controller_defs.insert(controller_def.name.clone(), controller_def.clone());
             }
         }
+
+        Ok(())
     }
 
     pub fn load_def_from_path<D>(path: &str) -> Result<D, &'static str>

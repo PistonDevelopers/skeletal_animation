@@ -12,9 +12,7 @@ use transform::Transform;
 
 /// A single skeletal pose
 #[derive(Debug)]
-pub struct AnimationSample<T: Transform>
-{
-
+pub struct AnimationSample<T: Transform> {
     /// Local pose transforms for each joint in the targeted skeleton
     /// (relative to parent joint)
     pub local_poses: Vec<T>,
@@ -24,13 +22,11 @@ pub struct AnimationSample<T: Transform>
 /// A sequence of skeletal pose samples at some sample rate
 #[derive(Debug)]
 pub struct AnimationClip<T: Transform> {
-
     /// The sequence of skeletal poses
     pub samples: Vec<AnimationSample<T>>,
 
     /// Sample rate for the clip. Assumes a constant sample rate.
     pub samples_per_second: f32,
-
 }
 
 #[derive(Debug, RustcDecodable)]
@@ -50,7 +46,7 @@ pub struct DifferenceClipDef {
 
 impl<T: Transform> AnimationClip<T> {
 
-    pub fn from_def(clip_def: &AnimationClipDef) -> AnimationClip<T> {
+    pub fn from_def(clip_def: &AnimationClipDef) -> Self {
 
         // Wacky. Shouldn't it be an error if the struct field isn't present?
         // FIXME - use an Option
@@ -66,13 +62,12 @@ impl<T: Transform> AnimationClip<T> {
         let skeleton_set = collada_document.get_skeletons().unwrap();
         let skeleton = Skeleton::from_collada(&skeleton_set[0]);
 
-        let mut clip = AnimationClip::from_collada(&skeleton, &animations, &adjust);
+        let mut clip = Self::from_collada(&skeleton, &animations, &adjust);
 
         if !clip_def.duration.is_nan() {
             clip.set_duration(clip_def.duration);
         }
         clip
-
     }
 
     /// Overrides the sampling rate of the clip to give the given duration (in seconds).
@@ -107,7 +102,6 @@ impl<T: Transform> AnimationClip<T> {
         let sample_1 = &self.samples[index_1];
         let sample_2 = &self.samples[index_2];
 
-
         for i in 0 .. sample_1.local_poses.len() {
 
             let pose_1 = sample_1.local_poses[i];
@@ -116,11 +110,10 @@ impl<T: Transform> AnimationClip<T> {
             let blended_pose = &mut blended_poses[i];
             *blended_pose = pose_1.lerp(pose_2, blend_factor);
         }
-
     }
 
     /// Create a difference clip from a source and reference clip for additive blending.
-    pub fn as_difference_clip(source_clip: &AnimationClip<T>, reference_clip: &AnimationClip<T>) -> AnimationClip<T> {
+    pub fn as_difference_clip(source_clip: &Self, reference_clip: &Self) -> Self {
 
         let samples = (0 .. source_clip.samples.len()).map(|sample_index| {
 
@@ -135,15 +128,15 @@ impl<T: Transform> AnimationClip<T> {
                 reference_pose.inverse().concat(source_pose)
             }).collect();
 
-            AnimationSample {
+            Self {
                 local_poses: difference_poses,
             }
 
         }).collect();
 
-        AnimationClip {
+        Self {
             samples_per_second: source_clip.samples_per_second,
-            samples: samples,
+            samples,
         }
     }
 
@@ -157,7 +150,7 @@ impl<T: Transform> AnimationClip<T> {
     /// * `transform` - An offset transform to apply to the root pose of each animation sample,
     ///                 useful for applying rotation, translation, or scaling when loading an
     ///                 animation.
-    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> AnimationClip<T> {
+    pub fn from_collada(skeleton: &Skeleton, animations: &Vec<collada::Animation>, transform: &Matrix4<f32>) -> Self {
         use std::f32::consts::PI;
 
         // Z-axis is 'up' in COLLADA, so need to rotate root pose about x-axis so y-axis is 'up'
@@ -209,10 +202,7 @@ impl<T: Transform> AnimationClip<T> {
             }
         }).collect();
 
-        AnimationClip {
-            samples_per_second: samples_per_second,
-            samples: samples,
-        }
+        Self { samples_per_second, samples }
     }
 
 }
@@ -234,9 +224,9 @@ pub struct ClipInstance<T: Transform> {
 
 impl<T: Transform> ClipInstance<T> {
 
-    pub fn new(clip: Rc<AnimationClip<T>>) -> ClipInstance<T> {
-        ClipInstance {
-            clip: clip,
+    pub fn new(clip: Rc<AnimationClip<T>>) -> Self {
+        Self {
+            clip,
             start_time: 0.0,
             playback_rate: 1.0,
             time_offset: 0.0,

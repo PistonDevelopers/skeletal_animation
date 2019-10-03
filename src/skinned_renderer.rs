@@ -57,7 +57,7 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
         tcx: &mut TextureContext<F, R, C>,
         collada_document: collada::document::ColladaDocument,
         texture_paths: Vec<&str>, // TODO - read from the COLLADA document (if available)
-    ) -> Result<SkinnedRenderer<R, T>, gfx::shade::ProgramError> {
+    ) -> Result<Self, gfx::shade::ProgramError> {
         use gfx::format::Formatted;
 
         let program = {
@@ -126,17 +126,16 @@ impl<'a, R: gfx::Resources, T: Transform + HasShaderSources<'a>> SkinnedRenderer
             ).unwrap();
 
             render_batches.push(SkinnedRenderBatch {
-                slice: slice,
+                slice,
                 vertex_buffer: vbuf,
-                skinning_transforms_buffer: skinning_transforms_buffer,
+                skinning_transforms_buffer,
                 texture: (texture.view.clone(), sampler.clone()),
             });
         }
 
-
-        Ok(SkinnedRenderer {
-            pso: pso,
-            render_batches: render_batches,
+        Ok(Self {
+            pso,
+            render_batches,
             skeleton: skeleton.clone(),
         })
     }
@@ -216,8 +215,8 @@ gfx_vertex_struct!(SkinnedVertex {
 });
 
 impl Default for SkinnedVertex {
-    fn default() -> SkinnedVertex {
-        SkinnedVertex {
+    fn default() -> Self {
+        Self {
             pos: [0.0; 3],
             normal: [0.0; 3],
             uv: [0.0; 2],

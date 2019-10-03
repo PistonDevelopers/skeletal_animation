@@ -123,7 +123,7 @@ pub struct AnimationStateDef {
 }
 
 impl Decodable for AnimationStateDef {
-    fn decode<D: Decoder>(decoder: &mut D) -> Result<AnimationStateDef, D::Error> {
+    fn decode<D: Decoder>(decoder: &mut D) -> Result<Self, D::Error> {
         decoder.read_struct("root", 0, |decoder| {
 
             let name = try!(decoder.read_struct_field("name", 0, |decoder| {
@@ -142,11 +142,7 @@ impl Decodable for AnimationStateDef {
                 })
             }));
 
-            Ok(AnimationStateDef {
-                name: name,
-                blend_tree: blend_tree,
-                transitions: transitions,
-            })
+            Ok(Self { name, blend_tree, transitions })
         })
     }
 }
@@ -185,7 +181,7 @@ impl<T: Transform> AnimationController<T> {
 
     /// Create an AnimationController instance from its definition, the desired skeleton, and a
     /// collection of currently loaded animation clips.
-    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip<T>>>) -> AnimationController<T> {
+    pub fn new(controller_def: AnimationControllerDef, skeleton: Rc<Skeleton>, animations: &HashMap<ClipId, Rc<AnimationClip<T>>>) -> Self {
 
         let mut parameters = HashMap::new();
 
@@ -200,18 +196,18 @@ impl<T: Transform> AnimationController<T> {
             blend_tree.synchronize(0.0, &parameters);
 
             states.insert(state_def.name.clone(), AnimationState {
-                blend_tree: blend_tree,
+                blend_tree,
                 transitions: state_def.transitions.clone()
             });
 
         }
 
-        AnimationController {
-            parameters: parameters,
+        Self {
+            parameters,
             skeleton: skeleton.clone(),
             local_clock: 0.0,
             playback_speed: 1.0,
-            states: states,
+            states,
             current_state: controller_def.initial_state,
             transition: None,
         }

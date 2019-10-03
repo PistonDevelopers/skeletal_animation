@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use collada::document::ColladaDocument;
@@ -50,7 +50,8 @@ pub struct DifferenceClipDef {
 
 impl<T: Transform> AnimationClip<T> {
 
-    pub fn from_def(clip_def: &AnimationClipDef) -> AnimationClip<T> {
+    /// `parent_folder` is the folder to search for the `AnimationClip`'s source file
+    pub fn from_def(clip_def: &AnimationClipDef, parent_folder: PathBuf) -> AnimationClip<T> {
 
         // Wacky. Shouldn't it be an error if the struct field isn't present?
         // FIXME - use an Option
@@ -61,7 +62,9 @@ impl<T: Transform> AnimationClip<T> {
         };
 
         // FIXME - load skeleton separately?
-        let collada_document = ColladaDocument::from_path(&Path::new(&clip_def.source[..])).unwrap();
+        let mut source_path = parent_folder;
+        source_path.push(&clip_def.source);
+        let collada_document = ColladaDocument::from_path(&source_path).unwrap();
         let animations = collada_document.get_animations().unwrap();
         let skeleton_set = collada_document.get_skeletons().unwrap();
         let skeleton = Skeleton::from_collada(&skeleton_set[0]);

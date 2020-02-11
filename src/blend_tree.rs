@@ -28,56 +28,56 @@ impl Decodable for BlendTreeNodeDef {
     fn decode<D: Decoder>(decoder: &mut D) -> Result<BlendTreeNodeDef, D::Error> {
         decoder.read_struct("root", 0, |decoder| {
 
-            let node_type = try!(decoder.read_struct_field("type", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+            let node_type = decoder.read_struct_field("type", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
             match &node_type[..] {
                 "LerpNode" => {
 
-                    let (input_1, input_2) = try!(decoder.read_struct_field("inputs", 0, |decoder| {
+                    let (input_1, input_2) = decoder.read_struct_field("inputs", 0, |decoder| {
                         decoder.read_seq(|decoder, _len| {
                             Ok((
-                                try!(decoder.read_seq_elt(0, Decodable::decode)),
-                                try!(decoder.read_seq_elt(1, Decodable::decode))
+                                decoder.read_seq_elt(0, Decodable::decode)?,
+                                decoder.read_seq_elt(1, Decodable::decode)?
                             ))
                         })
-                    }));
+                    })?;
 
-                    let blend_param_name = try!(decoder.read_struct_field("param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let blend_param_name = decoder.read_struct_field("param", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
                     Ok(BlendTreeNodeDef::LerpNode(Box::new(input_1), Box::new(input_2), blend_param_name))
 
                 },
                 "AdditiveNode" => {
 
-                    let (input_1, input_2) = try!(decoder.read_struct_field("inputs", 0, |decoder| {
+                    let (input_1, input_2) = decoder.read_struct_field("inputs", 0, |decoder| {
                         decoder.read_seq(|decoder, _len| {
                             Ok((
-                                try!(decoder.read_seq_elt(0, Decodable::decode)),
-                                try!(decoder.read_seq_elt(1, Decodable::decode))
+                                decoder.read_seq_elt(0, Decodable::decode)?,
+                                decoder.read_seq_elt(1, Decodable::decode)?
                             ))
                         })
-                    }));
+                    })?;
 
-                    let blend_param_name = try!(decoder.read_struct_field("param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let blend_param_name = decoder.read_struct_field("param", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
                     Ok(BlendTreeNodeDef::AdditiveNode(Box::new(input_1), Box::new(input_2), blend_param_name))
 
                 },
                 "IKNode" => {
 
-                    let input = try!(decoder.read_struct_field("input", 0, Decodable::decode));
+                    let input = decoder.read_struct_field("input", 0, Decodable::decode)?;
 
-                    let effector_name = try!(decoder.read_struct_field("effector", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let effector_name = decoder.read_struct_field("effector", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
-                    let blend_param_name = try!(decoder.read_struct_field("blend_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let blend_param_name = decoder.read_struct_field("blend_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
-                    let target_x_name = try!(decoder.read_struct_field("target_x_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                    let target_y_name = try!(decoder.read_struct_field("target_y_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                    let target_z_name = try!(decoder.read_struct_field("target_z_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let target_x_name = decoder.read_struct_field("target_x_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
+                    let target_y_name = decoder.read_struct_field("target_y_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
+                    let target_z_name = decoder.read_struct_field("target_z_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
-                    let bend_x_name = try!(decoder.read_struct_field("bend_x_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                    let bend_y_name = try!(decoder.read_struct_field("bend_y_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
-                    let bend_z_name = try!(decoder.read_struct_field("bend_z_param", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let bend_x_name = decoder.read_struct_field("bend_x_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
+                    let bend_y_name = decoder.read_struct_field("bend_y_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
+                    let bend_z_name = decoder.read_struct_field("bend_z_param", 0, |decoder| { Ok(decoder.read_str()?) })?;
 
 
                     Ok(BlendTreeNodeDef::IKNode(Box::new(input),
@@ -92,7 +92,7 @@ impl Decodable for BlendTreeNodeDef {
 
                 },
                 "ClipNode" => {
-                    let clip_source = try!(decoder.read_struct_field("clip_source", 0, |decoder| { Ok(try!(decoder.read_str())) }));
+                    let clip_source = decoder.read_struct_field("clip_source", 0, |decoder| { Ok(decoder.read_str()?) })?;
                     Ok(BlendTreeNodeDef::ClipNode(clip_source))
                 }
                 _ => panic!("Unexpected blend node type")
@@ -242,7 +242,7 @@ impl<T: Transform> AnimBlendTree<T> {
         }
     }
 
-    fn get_node(&self, handle: AnimNodeHandle) -> Option<&AnimNode<T>> {
+    fn get_node(&self, handle: AnimNodeHandle) -> Option<&dyn AnimNode<T>> {
         match handle {
             AnimNodeHandle::LerpAnimNodeHandle(i) => Some(&self.lerp_nodes[i]),
             AnimNodeHandle::AdditiveAnimNodeHandle(i) => Some(&self.additive_nodes[i]),

@@ -76,7 +76,7 @@ pub enum Operator {
 
 impl Decodable for Operator {
     fn decode<D: Decoder>(decoder: &mut D) -> Result<Operator, D::Error> {
-        match &try!(decoder.read_str())[..] {
+        match &decoder.read_str()?[..] {
             "<" => Ok(Operator::LessThan),
             ">" => Ok(Operator::GreaterThan),
             "<=" => Ok(Operator::LessThanEqual),
@@ -126,21 +126,21 @@ impl Decodable for AnimationStateDef {
     fn decode<D: Decoder>(decoder: &mut D) -> Result<AnimationStateDef, D::Error> {
         decoder.read_struct("root", 0, |decoder| {
 
-            let name = try!(decoder.read_struct_field("name", 0, |decoder| {
-                Ok(try!(decoder.read_str()))
-            }));
+            let name = decoder.read_struct_field("name", 0, |decoder| {
+                Ok(decoder.read_str()?)
+            })?;
 
-            let blend_tree = try!(decoder.read_struct_field("blend_tree", 0, Decodable::decode));
+            let blend_tree = decoder.read_struct_field("blend_tree", 0, Decodable::decode)?;
 
-            let transitions = try!(decoder.read_struct_field("transitions", 0, |decoder| {
+            let transitions = decoder.read_struct_field("transitions", 0, |decoder| {
                 decoder.read_seq(|decoder, len| {
                     let mut transitions = Vec::new();
                     for i in 0 .. len {
-                        transitions.push(try!(decoder.read_seq_elt(i, Decodable::decode)));
+                        transitions.push(decoder.read_seq_elt(i, Decodable::decode)?);
                     }
                     Ok(transitions)
                 })
-            }));
+            })?;
 
             Ok(AnimationStateDef {
                 name: name,

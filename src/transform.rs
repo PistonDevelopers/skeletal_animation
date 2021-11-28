@@ -8,7 +8,7 @@ pub trait Transform: Copy {
     fn lerp(self, other: Self, parameter: f32) -> Self;
     fn transform_vector(self, v: Vector3<f32>) -> Vector3<f32>;
     fn to_matrix(self) -> Matrix4<f32>;
-    fn from_matrix(Matrix4<f32>) -> Self;
+    fn from_matrix(m: Matrix4<f32>) -> Self;
     fn set_rotation(&mut self, rotation: Quaternion<f32>);
     fn get_rotation(self) -> Quaternion<f32>;
     fn set_translation(&mut self, translation: Vector3<f32>);

@@ -1,7 +1,7 @@
 [package]
 
 name = "skeletal_animation"
-version = "0.45.0"
+version = "0.46.0"
 authors = ["stjahns <s.t.jahns@gmail.com>"]
 keywords = ["animation", "character", "skeletal", "gfx", "piston"]
 description = "Skeletal character animation library, using gfx-rs"
@@ -25,6 +25,6 @@ quaternion = "1.0.0"
 dual_quaternion = "0.2.0"
 gfx = "0.18.1"
 piston-gfx_texture = "0.44.0"
-interpolation = "0.2.0"
+interpolation = "0.3.0"
 piston-float = "1.0.0"
-gfx_debug_draw = "0.31.0"
+gfx_debug_draw = "0.32.0"

@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/PistonDevelopers/skeletal_animation.png?branch=master)](https://travis-ci.org/PistonDevelopers/skeletal_animation)
 
+[DEPRECATED]
+
 A Rust library for data-driven skeletal animation.
 
 [Documentation](http://docs.piston.rs/skeletal_animation/skeletal_animation/)
